@@ -1,0 +1,6 @@
+apiVersion: v2
+name: chat-front
+description: Chat Front service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
