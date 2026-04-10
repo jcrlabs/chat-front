@@ -3,7 +3,6 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAuthStore } from '@/store/auth.store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useMessages } from '@/hooks/queries/use-messages'
-import { useQueryClient } from '@tanstack/react-query'
 import { RoomList } from '@/components/chat/RoomList'
 import { ChatBubble } from '@/components/chat/ChatBubble'
 import { MessageInput } from '@/components/chat/MessageInput'
@@ -19,7 +18,6 @@ export function ChatPage() {
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
   // timer refs per user so we can clear them without storing in state
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const qc = useQueryClient()
 
   const wsUrl = accessToken
     ? `${import.meta.env.VITE_WS_URL ?? 'wss://chat.jcrlabs.net/api'}/ws?token=${accessToken}`
@@ -30,7 +28,7 @@ export function ChatPage() {
 
     if (msg.type === 'chat_message' && msg.room_id === activeRoom.id) {
       const message: Message = {
-        id: msg.user_id! + msg.timestamp!,
+        id: `live-${msg.user_id}-${msg.timestamp}-${Math.random()}`,
         room_id: msg.room_id!,
         user_id: msg.user_id!,
         username: msg.username!,
@@ -38,7 +36,6 @@ export function ChatPage() {
         created_at: msg.timestamp!,
       }
       setLiveMessages((prev) => [...prev, message])
-      qc.invalidateQueries({ queryKey: ['messages', activeRoom.id] })
     }
 
     if (msg.type === 'typing' && msg.room_id === activeRoom.id && msg.user_id !== user?.id) {
@@ -52,7 +49,7 @@ export function ChatPage() {
       }, 3000))
       setTypingUsernames((prev) => prev.includes(uname) ? prev : [...prev, uname])
     }
-  }, [activeRoom, user?.id, qc])
+  }, [activeRoom, user?.id])
 
   const { connected, send } = useWebSocket(wsUrl, {
     onMessage: handleWSMessage,
