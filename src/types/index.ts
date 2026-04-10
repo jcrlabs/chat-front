@@ -1,6 +1,8 @@
 export interface User {
   id: string
   username: string
+  displayName?: string
+  avatarUrl?: string
   email?: string
   created_at: string
 }
@@ -25,6 +27,8 @@ export interface Message {
   room_id: string
   user_id: string
   username: string
+  display_name?: string
+  avatar_url?: string
   content: string
   created_at: string
 }
@@ -45,6 +49,8 @@ export interface WSServerMessage {
   room_id?: string
   user_id?: string
   username?: string
+  display_name?: string
+  avatar_url?: string
   content?: string
   timestamp?: string
   status?: 'online' | 'offline'

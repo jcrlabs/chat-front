@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAuthStore } from '@/store/auth.store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useMessages } from '@/hooks/queries/use-messages'
+import { useProfile } from '@/hooks/queries/use-profile'
 import { RoomList } from '@/components/chat/RoomList'
 import { ChatBubble } from '@/components/chat/ChatBubble'
 import { MessageInput } from '@/components/chat/MessageInput'
@@ -12,11 +13,22 @@ import type { Room, Message, WSServerMessage } from '@/types'
 
 export function ChatPage() {
   const user = useAuthStore((s) => s.user)
+  const updateUser = useAuthStore((s) => s.updateUser)
   const accessToken = useAuthStore((s) => s.accessToken)
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Load profile on mount to sync displayName and avatarUrl into the store
+  const { data: profile } = useProfile()
+  useEffect(() => {
+    if (!profile) return
+    updateUser({
+      displayName: profile.display_name,
+      avatarUrl: profile.has_avatar ? `/api/users/${profile.id}/avatar` : undefined,
+    })
+  }, [profile, updateUser])
 
   const wsUrl = accessToken
     ? `${import.meta.env.VITE_WS_URL ?? 'wss://chat.jcrlabs.net/api'}/ws?token=${accessToken}`
@@ -31,6 +43,8 @@ export function ChatPage() {
         room_id: msg.room_id!,
         user_id: msg.user_id!,
         username: msg.username!,
+        display_name: msg.display_name,
+        avatar_url: msg.avatar_url,
         content: msg.content!,
         created_at: msg.timestamp!,
       }
@@ -39,7 +53,7 @@ export function ChatPage() {
 
     if (msg.type === 'typing' && msg.room_id === activeRoom.id && msg.user_id !== user?.id) {
       const uid = msg.user_id!
-      const uname = msg.username!
+      const uname = msg.display_name || msg.username!
       const timers = typingTimers.current
       if (timers.has(uid)) clearTimeout(timers.get(uid))
       timers.set(uid, setTimeout(() => {
@@ -84,7 +98,6 @@ export function ChatPage() {
       <main className="flex flex-1 flex-col overflow-hidden">
         {activeRoom ? (
           <>
-            {/* Channel header */}
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1e1f22] px-4 shadow-sm">
               <span className="text-[#80848e] text-lg font-light">#</span>
               <h1 className="font-semibold text-[#f2f3f5]">{activeRoom.name}</h1>
@@ -138,9 +151,12 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
     count: allMessages.length,
     getScrollElement: () => parentRef.current,
     estimateSize: (index) => {
-      const isCont = index > 0 &&
+      const isCont =
+        index > 0 &&
         allMessages[index - 1].user_id === allMessages[index].user_id &&
-        new Date(allMessages[index].created_at).getTime() - new Date(allMessages[index - 1].created_at).getTime() < CONTINUATION_MS
+        new Date(allMessages[index].created_at).getTime() -
+          new Date(allMessages[index - 1].created_at).getTime() <
+          CONTINUATION_MS
       return isCont ? 28 : 64
     },
     overscan: 10,
@@ -170,7 +186,9 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
           const isContinuation =
             item.index > 0 &&
             allMessages[item.index - 1].user_id === msg.user_id &&
-            new Date(msg.created_at).getTime() - new Date(allMessages[item.index - 1].created_at).getTime() < CONTINUATION_MS
+            new Date(msg.created_at).getTime() -
+              new Date(allMessages[item.index - 1].created_at).getTime() <
+              CONTINUATION_MS
 
           return (
             <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
