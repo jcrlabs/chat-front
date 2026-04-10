@@ -5,6 +5,9 @@ image:
 
 ingress:
   host: chat.jcrlabs.net
+  apiBackend:
+    service: chat-back
+    port: 80
 
 hpa:
   minReplicas: 2
