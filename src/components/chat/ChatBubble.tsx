@@ -1,37 +1,82 @@
-import { cn, formatTime } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import type { Message } from '@/types'
 
 interface ChatBubbleProps {
   message: Message
   isOwn: boolean
+  isContinuation?: boolean
 }
 
-export function ChatBubble({ message, isOwn }: ChatBubbleProps) {
-  return (
-    <div className={cn('flex items-end gap-2', isOwn && 'flex-row-reverse')}>
-      <div
-        className={cn(
-          'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
-          isOwn ? 'bg-indigo-600' : 'bg-gray-600',
-        )}
-      >
-        {message.username[0].toUpperCase()}
-      </div>
-      <div className={cn('max-w-xs lg:max-w-md', isOwn && 'items-end')}>
-        {!isOwn && (
-          <p className="mb-0.5 text-xs text-gray-400">{message.username}</p>
-        )}
-        <div
-          className={cn(
-            'rounded-2xl px-3 py-2 text-sm',
-            isOwn
-              ? 'rounded-br-sm bg-indigo-600 text-white'
-              : 'rounded-bl-sm bg-gray-700 text-gray-100',
-          )}
-        >
-          {message.content}
+const USER_COLORS = [
+  '#7289da',
+  '#43b581',
+  '#faa61a',
+  '#ed4245',
+  '#eb459e',
+  '#5865f2',
+  '#57f287',
+  '#fee75c',
+  '#3ba55d',
+  '#ff7043',
+]
+
+function getUserColor(userId: string): string {
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
+}
+
+function formatDiscordTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (d.toDateString() === now.toDateString()) return `Today at ${time}`
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`
+  return `${d.toLocaleDateString()} ${time}`
+}
+
+function formatShortTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+export function ChatBubble({ message, isContinuation = false }: ChatBubbleProps) {
+  const color = getUserColor(message.user_id)
+
+  if (isContinuation) {
+    return (
+      <div className="group flex items-start gap-4 px-4 py-0.5 hover:bg-[#2e3035] rounded">
+        <div className="w-10 shrink-0 flex justify-end">
+          <span className="invisible text-[11px] text-[#80848e] group-hover:visible leading-5 mt-0.5">
+            {formatShortTime(message.created_at)}
+          </span>
         </div>
-        <p className="mt-0.5 text-xs text-gray-500">{formatTime(message.created_at)}</p>
+        <p className="flex-1 text-sm text-[#dcddde] leading-relaxed break-words">{message.content}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="group flex items-start gap-4 px-4 pt-4 pb-0.5 hover:bg-[#2e3035] rounded">
+      <div className="w-10 shrink-0">
+        <div
+          className="flex size-10 items-center justify-center rounded-full text-sm font-bold text-white select-none"
+          style={{ backgroundColor: color }}
+        >
+          {message.username[0].toUpperCase()}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <span className={cn('font-medium text-sm leading-none')} style={{ color }}>
+            {message.username}
+          </span>
+          <span className="text-[11px] text-[#949ba4]">{formatDiscordTime(message.created_at)}</span>
+        </div>
+        <p className="mt-1 text-sm text-[#dcddde] leading-relaxed break-words">{message.content}</p>
       </div>
     </div>
   )

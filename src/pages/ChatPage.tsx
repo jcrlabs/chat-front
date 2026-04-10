@@ -16,7 +16,6 @@ export function ChatPage() {
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
-  // timer refs per user so we can clear them without storing in state
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const wsUrl = accessToken
@@ -79,26 +78,44 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen bg-[#313338] text-[#dcddde]">
       <RoomList activeRoomId={activeRoom?.id ?? null} onSelect={handleSelectRoom} />
 
       <main className="flex flex-1 flex-col overflow-hidden">
         {activeRoom ? (
           <>
-            <div className="flex items-center gap-2 border-b border-gray-700 px-6 py-3">
-              <span className="text-gray-400">#</span>
-              <h1 className="font-semibold">{activeRoom.name}</h1>
-              <span className={`ml-auto size-2 rounded-full ${connected ? 'bg-green-400' : 'bg-gray-500'}`} />
+            {/* Channel header */}
+            <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1e1f22] px-4 shadow-sm">
+              <span className="text-[#80848e] text-lg font-light">#</span>
+              <h1 className="font-semibold text-[#f2f3f5]">{activeRoom.name}</h1>
+              <div className="ml-auto flex items-center gap-2">
+                <span
+                  className={`size-2 rounded-full ${connected ? 'bg-[#3ba55d]' : 'bg-[#80848e]'}`}
+                  title={connected ? 'Connected' : 'Disconnected'}
+                />
+              </div>
             </div>
 
-            <MessageList roomId={activeRoom.id} liveMessages={liveMessages} userId={user?.id ?? ''} />
+            <MessageList
+              roomId={activeRoom.id}
+              liveMessages={liveMessages}
+              userId={user?.id ?? ''}
+            />
 
             <TypingIndicator usernames={typingUsernames} />
-            <MessageInput onSend={handleSend} onTyping={handleTyping} disabled={!connected} />
+            <MessageInput
+              onSend={handleSend}
+              onTyping={handleTyping}
+              disabled={!connected}
+              channelName={activeRoom.name}
+            />
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-gray-500">
-            Select a room to start chatting
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-[#80848e]">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="opacity-40">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+            <p className="text-sm">Select a channel to start chatting</p>
           </div>
         )}
       </main>
@@ -115,10 +132,17 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
     ...liveMessages,
   ]
 
+  const CONTINUATION_MS = 5 * 60 * 1000
+
   const virtualizer = useVirtualizer({
     count: allMessages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 60,
+    estimateSize: (index) => {
+      const isCont = index > 0 &&
+        allMessages[index - 1].user_id === allMessages[index].user_id &&
+        new Date(allMessages[index].created_at).getTime() - new Date(allMessages[index - 1].created_at).getTime() < CONTINUATION_MS
+      return isCont ? 28 : 64
+    },
     overscan: 10,
   })
 
@@ -131,11 +155,11 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
   if (isLoading) return <MessageSkeleton />
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto p-4">
+    <div ref={parentRef} className="flex-1 overflow-y-auto py-4">
       {hasNextPage && (
         <button
           onClick={() => fetchNextPage()}
-          className="mb-4 w-full text-center text-xs text-indigo-400 hover:text-indigo-300"
+          className="mb-2 w-full text-center text-xs text-[#5865f2] hover:text-[#7289da] py-1"
         >
           Load older messages
         </button>
@@ -143,11 +167,14 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
       <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((item) => {
           const msg = allMessages[item.index]
+          const isContinuation =
+            item.index > 0 &&
+            allMessages[item.index - 1].user_id === msg.user_id &&
+            new Date(msg.created_at).getTime() - new Date(allMessages[item.index - 1].created_at).getTime() < CONTINUATION_MS
+
           return (
             <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
-              <div className="py-1">
-                <ChatBubble message={msg} isOwn={msg.user_id === userId} />
-              </div>
+              <ChatBubble message={msg} isOwn={msg.user_id === userId} isContinuation={isContinuation} />
             </div>
           )
         })}
