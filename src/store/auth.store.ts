@@ -1,11 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+interface AuthUser {
+  id: string
+  username: string
+  displayName?: string
+  avatarUrl?: string
+}
+
 interface AuthState {
   accessToken: string | null
-  user: { id: string; username: string } | null
+  user: AuthUser | null
   setTokens: (accessToken: string) => void
-  setUser: (user: { id: string; username: string }) => void
+  setUser: (user: AuthUser) => void
+  updateUser: (updates: Partial<Pick<AuthUser, 'displayName' | 'avatarUrl'>>) => void
   logout: () => void
 }
 
@@ -16,11 +24,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       setTokens: (accessToken) => set({ accessToken }),
       setUser: (user) => set({ user }),
+      updateUser: (updates) =>
+        set((state) => ({ user: state.user ? { ...state.user, ...updates } : null })),
       logout: () => set({ accessToken: null, user: null }),
     }),
     {
       name: 'chat-auth',
-      partialize: (state) => ({ user: state.user }), // don't persist token
+      partialize: (state) => ({ user: state.user }),
     }
   )
 )
