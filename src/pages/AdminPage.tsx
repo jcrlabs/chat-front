@@ -141,7 +141,7 @@ function UsersTab() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5865f2] text-xs font-bold text-white">
-                        {(u.display_name ?? u.username)[0].toUpperCase()}
+                        {(u.display_name || u.username || '?')[0].toUpperCase()}
                       </div>
                       <div>
                         <div className="font-medium text-[#f2f3f5]">{u.display_name ?? u.username}</div>
