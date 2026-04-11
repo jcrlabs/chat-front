@@ -203,7 +203,7 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
     return () => {
       if (inVoice) leaveVoice()
     }
-  }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId]) // intentional: only cleanup when room changes
 
   return {
     inVoice, participants, muted,
