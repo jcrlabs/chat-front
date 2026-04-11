@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/auth.store'
+import { jwtDecode } from '@/lib/jwt'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api',
@@ -46,7 +47,9 @@ api.interceptors.response.use(
 
     try {
       const { data } = await axios.post(`${import.meta.env.VITE_API_URL ?? '/api'}/auth/refresh`, {}, { withCredentials: true })
+      const payload = jwtDecode(data.access_token)
       useAuthStore.getState().setTokens(data.access_token)
+      useAuthStore.getState().updateUser({ isAdmin: payload.is_admin ?? false })
       processQueue(null, data.access_token)
       original.headers.Authorization = `Bearer ${data.access_token}`
       return api(original)

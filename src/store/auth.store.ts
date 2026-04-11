@@ -14,7 +14,7 @@ interface AuthState {
   user: AuthUser | null
   setTokens: (accessToken: string) => void
   setUser: (user: AuthUser) => void
-  updateUser: (updates: Partial<Pick<AuthUser, 'displayName' | 'avatarUrl'>>) => void
+  updateUser: (updates: Partial<Pick<AuthUser, 'displayName' | 'avatarUrl' | 'isAdmin'>>) => void
   logout: () => void
 }
 
