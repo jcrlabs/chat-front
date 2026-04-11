@@ -100,7 +100,15 @@ export function ChatPage() {
     send({ type: 'join_room', room_id: activeRoom.id })
   }, [activeRoom, connected, send])
 
+  // Auto-join voice when entering a voice channel
+  useEffect(() => {
+    if (activeRoom?.type === 'voice' && connected && !inVoice) {
+      joinVoice()
+    }
+  }, [activeRoom, connected])
+
   const handleSelectRoom = (room: Room) => {
+    if (activeRoom?.type === 'voice' && inVoice) leaveVoice()
     if (activeRoom) send({ type: 'leave_room', room_id: activeRoom.id })
     setActiveRoom(room)
     setTypingUsernames([])
@@ -158,6 +166,10 @@ export function ChatPage() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#80848e] shrink-0">
                   <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
                 </svg>
+              ) : activeRoom.type === 'voice' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#3ba55d] shrink-0">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
               ) : (
                 <span className="text-[#80848e] text-lg font-light">#</span>
               )}
@@ -188,31 +200,52 @@ export function ChatPage() {
               </div>
             </div>
 
-            <MessageList
-              roomId={activeRoom.id}
-              liveMessages={liveMessages}
-              userId={user?.id ?? ''}
-            />
-
-            <TypingIndicator usernames={typingUsernames} />
-            <MessageInput
-              onSend={handleSend}
-              onTyping={handleTyping}
-              disabled={!connected}
-              channelName={activeRoom.name}
-            />
-            {inVoice && (
-              <VoicePanel
-                participants={participants}
-                muted={muted}
-                devices={devices}
-                micDeviceId={micDeviceId}
-                speakerDeviceId={speakerDeviceId}
-                onChangeMic={changeMic}
-                onChangeSpeaker={setSpeakerDevice}
-                onToggleMute={toggleMute}
-                onLeave={leaveVoice}
-              />
+            {activeRoom.type === 'voice' ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 text-[#80848e]">
+                {inVoice ? (
+                  <VoicePanel
+                    participants={participants}
+                    muted={muted}
+                    devices={devices}
+                    micDeviceId={micDeviceId}
+                    speakerDeviceId={speakerDeviceId}
+                    onChangeMic={changeMic}
+                    onChangeSpeaker={setSpeakerDevice}
+                    onToggleMute={toggleMute}
+                    onLeave={leaveVoice}
+                  />
+                ) : (
+                  <p className="text-sm animate-pulse">Connecting to voice...</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <MessageList
+                  roomId={activeRoom.id}
+                  liveMessages={liveMessages}
+                  userId={user?.id ?? ''}
+                />
+                <TypingIndicator usernames={typingUsernames} />
+                <MessageInput
+                  onSend={handleSend}
+                  onTyping={handleTyping}
+                  disabled={!connected}
+                  channelName={activeRoom.name}
+                />
+                {inVoice && (
+                  <VoicePanel
+                    participants={participants}
+                    muted={muted}
+                    devices={devices}
+                    micDeviceId={micDeviceId}
+                    speakerDeviceId={speakerDeviceId}
+                    onChangeMic={changeMic}
+                    onChangeSpeaker={setSpeakerDevice}
+                    onToggleMute={toggleMute}
+                    onLeave={leaveVoice}
+                  />
+                )}
+              </>
             )}
           </>
         ) : (
