@@ -33,6 +33,10 @@ export const useAcceptFriendRequest = () => {
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['friend-requests'] })
     },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error al aceptar la solicitud'
+      alert(msg)
+    },
   })
 }
 
