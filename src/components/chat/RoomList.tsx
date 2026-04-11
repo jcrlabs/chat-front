@@ -35,6 +35,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
   const declineInvite = useDeclineInvite()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const isAdmin = user?.isAdmin ?? false
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<RoomType>('public')
   const [showForm, setShowForm] = useState(false)
@@ -101,6 +102,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
 
   const RoomRow = ({ room }: { room: Room }) => {
     const isOwner = room.owner_id === user?.id
+    const canManage = isOwner || isAdmin
     const isRenaming = renamingId === room.id
     return (
       <div
@@ -135,9 +137,9 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
             <span className="truncate">{room.name}</span>
           </button>
         )}
-        {!isRenaming && isOwner && (
+        {!isRenaming && canManage && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            {room.type === 'private' && (
+            {room.type === 'private' && isOwner && (
               <button onClick={() => setInviteRoom(room)} title="Invite user" className="text-[#949ba4] hover:text-[#dbdee1] p-0.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -224,6 +226,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
               <nav className="space-y-0.5 px-2">
                 {rooms?.filter((r) => r.type === 'voice').map((room) => {
                   const isOwner = room.owner_id === user?.id
+                  const canManageVoice = isOwner || isAdmin
                   const isRenaming = renamingId === room.id
                   return (
                     <div key={room.id} className={cn('group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors', room.id === activeRoomId ? 'bg-[#404249] text-[#f2f3f5]' : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]')}>
@@ -235,7 +238,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
                           <span className="truncate">{room.name}</span>
                         </button>
                       )}
-                      {!isRenaming && isOwner && (
+                      {!isRenaming && canManageVoice && (
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <button onClick={() => startRename(room)} title="Rename" className="text-[#949ba4] hover:text-[#dbdee1] p-0.5">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>

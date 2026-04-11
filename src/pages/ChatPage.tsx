@@ -228,6 +228,7 @@ export function ChatPage() {
                   liveMessages={liveMessages}
                   userId={user?.id ?? ''}
                   myRole={myRole}
+                  isAdmin={user?.isAdmin ?? false}
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                 />
@@ -265,6 +266,7 @@ function MessageList({
   liveMessages,
   userId,
   myRole,
+  isAdmin,
   onEdit,
   onDelete,
 }: {
@@ -272,6 +274,7 @@ function MessageList({
   liveMessages: Message[]
   userId: string
   myRole: MemberRole
+  isAdmin: boolean
   onEdit: (id: string, content: string) => void
   onDelete: (id: string) => void
 }) {
@@ -332,6 +335,7 @@ function MessageList({
                 isOwn={msg.user_id === userId}
                 isContinuation={isContinuation}
                 myRole={myRole}
+                isAdmin={isAdmin}
                 onEdit={msg.user_id === userId ? onEdit : undefined}
                 onDelete={onDelete}
               />

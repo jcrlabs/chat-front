@@ -7,6 +7,8 @@ interface AdminRoom { id: string; name: string; type: string; owner_username: st
 
 export function AdminPage() {
   const [tab, setTab] = useState<'users' | 'rooms'>('users')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const qc = useQueryClient()
 
   const { data: users = [] } = useQuery<AdminUser[]>({ queryKey: ['admin-users'], queryFn: () => api.get('/admin/users').then(r => r.data) })
@@ -14,8 +16,13 @@ export function AdminPage() {
 
   const deleteUser = useMutation({ mutationFn: (id: string) => api.delete(`/admin/users/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) })
   const deleteRoom = useMutation({ mutationFn: (id: string) => api.delete(`/admin/rooms/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-rooms'] }) })
+  const renameRoom = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => api.patch(`/admin/rooms/${id}`, { name }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-rooms'] }); setRenamingId(null) } })
+  const toggleAdmin = useMutation({ mutationFn: ({ id, is_admin }: { id: string; is_admin: boolean }) => api.patch(`/admin/users/${id}/admin`, { is_admin }), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) })
 
   const confirm = (msg: string, fn: () => void) => { if (window.confirm(msg)) fn() }
+
+  const startRename = (room: AdminRoom) => { setRenamingId(room.id); setRenameValue(room.name) }
+  const submitRename = (id: string) => { const n = renameValue.trim(); if (n) renameRoom.mutate({ id, name: n }); else setRenamingId(null) }
 
   return (
     <div className="min-h-screen bg-[#313338] text-[#dcddde]">
@@ -54,8 +61,15 @@ export function AdminPage() {
                   <td className="px-4 py-3">{u.is_admin && <span className="rounded bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white">ADMIN</span>}</td>
                   <td className="px-4 py-3 text-[#949ba4]">{new Date(u.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
-                    {!u.is_admin && <button onClick={() => confirm(`Delete user ${u.username}?`, () => deleteUser.mutate(u.id))}
-                      className="rounded px-2 py-1 text-xs text-[#f04747] hover:bg-[#f0474720] transition-colors">Delete</button>}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => confirm(`${u.is_admin ? 'Revoke' : 'Grant'} admin for ${u.username}?`, () => toggleAdmin.mutate({ id: u.id, is_admin: !u.is_admin }))}
+                        className={`rounded px-2 py-1 text-xs transition-colors ${u.is_admin ? 'text-[#faa61a] hover:bg-[#faa61a20]' : 'text-[#3ba55d] hover:bg-[#3ba55d20]'}`}>
+                        {u.is_admin ? 'Revoke admin' : 'Make admin'}
+                      </button>
+                      {!u.is_admin && <button onClick={() => confirm(`Delete user ${u.username}?`, () => deleteUser.mutate(u.id))}
+                        className="rounded px-2 py-1 text-xs text-[#f04747] hover:bg-[#f0474720] transition-colors">Delete</button>}
+                    </div>
                   </td>
                 </tr>
               ))}</tbody>
@@ -76,14 +90,24 @@ export function AdminPage() {
               </tr></thead>
               <tbody>{rooms.map(r => (
                 <tr key={r.id} className="border-b border-[#1e1f22] hover:bg-[#35373c]">
-                  <td className="px-4 py-3 font-medium text-[#f2f3f5]">{r.name}</td>
+                  <td className="px-4 py-3 font-medium text-[#f2f3f5]">
+                    {renamingId === r.id ? (
+                      <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') submitRename(r.id); if (e.key === 'Escape') setRenamingId(null) }}
+                        onBlur={() => submitRename(r.id)}
+                        className="rounded bg-[#1e1f22] px-2 py-0.5 text-sm text-[#dbdee1] outline-none focus:ring-1 focus:ring-[#5865f2] w-40" />
+                    ) : r.name}
+                  </td>
                   <td className="px-4 py-3"><span className="rounded bg-[#35373c] px-1.5 py-0.5 text-[10px] font-mono text-[#949ba4]">{r.type}</span></td>
                   <td className="px-4 py-3 text-[#949ba4]">{r.owner_username}</td>
                   <td className="px-4 py-3 text-[#949ba4]">{r.member_count}</td>
                   <td className="px-4 py-3 text-[#949ba4]">{new Date(r.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => confirm(`Delete room #${r.name}?`, () => deleteRoom.mutate(r.id))}
-                      className="rounded px-2 py-1 text-xs text-[#f04747] hover:bg-[#f0474720] transition-colors">Delete</button>
+                    <div className="flex items-center justify-end gap-2">
+                      {renamingId !== r.id && <button onClick={() => startRename(r)} className="rounded px-2 py-1 text-xs text-[#949ba4] hover:bg-[#35373c] transition-colors">Rename</button>}
+                      <button onClick={() => confirm(`Delete room #${r.name}?`, () => deleteRoom.mutate(r.id))}
+                        className="rounded px-2 py-1 text-xs text-[#f04747] hover:bg-[#f0474720] transition-colors">Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}</tbody>

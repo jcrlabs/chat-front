@@ -6,6 +6,7 @@ interface ChatBubbleProps {
   isOwn: boolean
   isContinuation?: boolean
   myRole?: MemberRole
+  isAdmin?: boolean
   onEdit?: (id: string, content: string) => void
   onDelete?: (id: string) => void
 }
@@ -105,6 +106,7 @@ export function ChatBubble({
   isOwn,
   isContinuation = false,
   myRole,
+  isAdmin = false,
   onEdit,
   onDelete,
 }: ChatBubbleProps) {
@@ -113,7 +115,7 @@ export function ChatBubble({
   const color = getUserColor(message.user_id)
   const displayName = message.display_name || message.username
   const canEdit = isOwn && !!onEdit
-  const canDelete = (isOwn || myRole === 'owner' || myRole === 'admin') && !!onDelete
+  const canDelete = (isOwn || myRole === 'owner' || myRole === 'admin' || isAdmin) && !!onDelete
 
   const startEdit = () => {
     setEditValue(message.content)
