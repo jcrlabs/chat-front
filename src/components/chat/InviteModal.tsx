@@ -44,7 +44,7 @@ export function InviteModal({ roomId, roomName, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md rounded-lg bg-[#313338] p-6 shadow-xl">
+      <div className="w-full max-w-md mx-4 rounded-lg bg-[#313338] p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[#f2f3f5]">Invite to #{roomName}</h2>
           <button onClick={onClose} className="text-[#949ba4] hover:text-[#dbdee1]">

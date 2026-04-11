@@ -64,7 +64,7 @@ export function ProfileModal({ onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-sm rounded-lg bg-[#313338] shadow-xl">
+      <div className="w-full max-w-sm mx-4 rounded-lg bg-[#313338] shadow-xl">
         {/* Header banner */}
         <div className="h-20 rounded-t-lg bg-[#5865f2]" />
 
