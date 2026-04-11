@@ -248,8 +248,10 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
   const { data, isLoading, fetchNextPage, hasNextPage } = useMessages(roomId)
   const parentRef = useRef<HTMLDivElement>(null)
 
+  // pages[0] = most recent fetch, pages[n] = oldest. Reverse pages so oldest first,
+  // then reverse each page (backend returns DESC) to get chronological order.
   const allMessages = [
-    ...(data?.pages.flatMap((p) => [...p].reverse()) ?? []),
+    ...(data?.pages.slice().reverse().flatMap((p) => [...p].reverse()) ?? []),
     ...liveMessages,
   ]
 

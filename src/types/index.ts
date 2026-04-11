@@ -8,7 +8,7 @@ export interface User {
   created_at: string
 }
 
-export type RoomType = 'public' | 'private' | 'dm'
+export type RoomType = 'public' | 'private' | 'dm' | 'voice'
 
 export interface Room {
   id: string

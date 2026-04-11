@@ -18,7 +18,7 @@ export function AddFriendModal({ onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-[460px] rounded-lg bg-[#2b2d31] shadow-xl"
+        className="w-full max-w-[460px] mx-4 rounded-lg bg-[#2b2d31] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-[#1e1f22] px-5 py-4">

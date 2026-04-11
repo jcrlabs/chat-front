@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { ChatPage } from '@/pages/ChatPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
+import { AdminPage } from '@/pages/AdminPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
                 </RequireAuth>
               }
             />
+            <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ErrorBoundary>
