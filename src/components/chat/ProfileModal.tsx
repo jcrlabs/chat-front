@@ -2,6 +2,33 @@ import { useRef, useState } from 'react'
 import { useAuthStore } from '@/store/auth.store'
 import { useProfile, useUpdateProfile, useUploadAvatar } from '@/hooks/queries/use-profile'
 
+function CopyTag({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      onClick={copy}
+      title="Copy tag"
+      className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[#5865f2] hover:bg-[#5865f220] transition-colors"
+    >
+      {copied ? (
+        'Copied!'
+      ) : (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  )
+}
+
 interface Props {
   onClose: () => void
 }
@@ -93,11 +120,20 @@ export function ProfileModal({ onClose }: Props) {
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
-              Username
+              Username &amp; Tag
             </label>
-            <div className="rounded bg-[#1e1f22] px-3 py-2 text-sm text-[#6d6f78]">
-              {user?.username}
+            <div className="flex items-center rounded bg-[#1e1f22] px-3 py-2 text-sm text-[#6d6f78]">
+              <span>
+                {user?.username}
+                {profile?.tag && (
+                  <span className="text-[#5865f2]">#{profile.tag}</span>
+                )}
+              </span>
+              {profile?.tag && (
+                <CopyTag value={`${user?.username}#${profile.tag}`} />
+              )}
             </div>
+            <p className="mt-1 text-xs text-[#949ba4]">Share this tag so others can find you</p>
           </div>
 
           <div className="flex gap-2 pt-1">

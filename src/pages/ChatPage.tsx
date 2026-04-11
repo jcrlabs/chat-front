@@ -4,21 +4,29 @@ import { useAuthStore } from '@/store/auth.store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useMessages } from '@/hooks/queries/use-messages'
 import { useProfile } from '@/hooks/queries/use-profile'
+import { useRoomMembers } from '@/hooks/queries/use-rooms'
 import { RoomList } from '@/components/chat/RoomList'
 import { ChatBubble } from '@/components/chat/ChatBubble'
 import { MessageInput } from '@/components/chat/MessageInput'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
+import { MembersPanel } from '@/components/chat/MembersPanel'
+import { VoicePanel } from '@/components/chat/VoicePanel'
 import { MessageSkeleton } from '@/components/ui/Skeleton'
-import type { Room, Message, WSServerMessage } from '@/types'
+import { useWebRTC } from '@/hooks/useWebRTC'
+import type { MemberRole, Room, Message, WSServerMessage } from '@/types'
 
 export function ChatPage() {
   const user = useAuthStore((s) => s.user)
   const updateUser = useAuthStore((s) => s.updateUser)
   const accessToken = useAuthStore((s) => s.accessToken)
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [membersOpen, setMembersOpen] = useState(false)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const { data: roomMembers } = useRoomMembers(activeRoom?.id ?? null)
+  const myRole: MemberRole = roomMembers?.find((m) => m.user_id === user?.id)?.role ?? 'member'
 
   // Load profile on mount to sync displayName and avatarUrl into the store
   const { data: profile } = useProfile()
@@ -51,6 +59,11 @@ export function ChatPage() {
       setLiveMessages((prev) => [...prev, message])
     }
 
+    if (msg.type.startsWith('voice_') || msg.type === 'ice_candidate') {
+      handleVoiceMessage(msg)
+      return
+    }
+
     if (msg.type === 'typing' && msg.room_id === activeRoom.id && msg.user_id !== user?.id) {
       const uid = msg.user_id!
       const uname = msg.display_name || msg.username!
@@ -69,6 +82,12 @@ export function ChatPage() {
     enabled: !!accessToken,
   })
 
+  const { inVoice, participants, muted, joinVoice, leaveVoice, toggleMute, handleVoiceMessage } = useWebRTC({
+    roomId: activeRoom?.id ?? null,
+    myUserId: user?.id ?? '',
+    sendWS: send as (msg: object) => void,
+  })
+
   useEffect(() => {
     if (!activeRoom || !connected) return
     setLiveMessages([])
@@ -79,6 +98,7 @@ export function ChatPage() {
     if (activeRoom) send({ type: 'leave_room', room_id: activeRoom.id })
     setActiveRoom(room)
     setTypingUsernames([])
+    setSidebarOpen(false) // auto-close on mobile when room selected
   }
 
   const handleSend = (content: string) => {
@@ -93,12 +113,41 @@ export function ChatPage() {
 
   return (
     <div className="flex h-screen bg-[#313338] text-[#dcddde]">
-      <RoomList activeRoomId={activeRoom?.id ?? null} onSelect={handleSelectRoom} />
+      {/* Sidebar overlay on mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      <main className="flex flex-1 flex-col overflow-hidden">
+      {/* Sidebar */}
+      <div
+        className={[
+          'fixed inset-y-0 left-0 z-30 transition-transform duration-200 md:relative md:z-auto md:translate-x-0 md:flex',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}
+      >
+        <RoomList
+          activeRoomId={activeRoom?.id ?? null}
+          onSelect={handleSelectRoom}
+        />
+      </div>
+
+      <main className="flex flex-1 flex-col overflow-hidden min-w-0">
         {activeRoom ? (
           <>
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1e1f22] px-4 shadow-sm">
+              {/* Mobile: back/hamburger button */}
+              <button
+                className="md:hidden shrink-0 text-[#80848e] hover:text-[#dbdee1] mr-1"
+                onClick={() => setSidebarOpen(true)}
+                title="Open sidebar"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+              </button>
               {activeRoom.type === 'dm' ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#80848e] shrink-0">
                   <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
@@ -106,12 +155,30 @@ export function ChatPage() {
               ) : (
                 <span className="text-[#80848e] text-lg font-light">#</span>
               )}
-              <h1 className="font-semibold text-[#f2f3f5]">{activeRoom.name}</h1>
-              <div className="ml-auto flex items-center gap-2">
+              <h1 className="font-semibold text-[#f2f3f5] truncate">{activeRoom.name}</h1>
+              <div className="ml-auto flex items-center gap-2 shrink-0">
                 <span
                   className={`size-2 rounded-full ${connected ? 'bg-[#3ba55d]' : 'bg-[#80848e]'}`}
                   title={connected ? 'Connected' : 'Disconnected'}
                 />
+                <button
+                  onClick={() => inVoice ? leaveVoice() : joinVoice()}
+                  title={inVoice ? 'Leave voice' : 'Join voice'}
+                  className={`transition-colors ${inVoice ? 'text-[#3ba55d] hover:text-[#f04747]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setMembersOpen((v) => !v)}
+                  title="Members"
+                  className={`text-[#80848e] hover:text-[#dbdee1] transition-colors ${membersOpen ? 'text-[#dbdee1]' : ''}`}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                  </svg>
+                </button>
               </div>
             </div>
 
@@ -128,9 +195,24 @@ export function ChatPage() {
               disabled={!connected}
               channelName={activeRoom.name}
             />
+            {inVoice && (
+              <VoicePanel
+                participants={participants}
+                muted={muted}
+                onToggleMute={toggleMute}
+                onLeave={leaveVoice}
+              />
+            )}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-[#80848e]">
+            {/* Mobile: show hamburger when no room and sidebar closed */}
+            <button
+              className="md:hidden mb-2 rounded bg-[#5865f2] px-4 py-2 text-sm font-medium text-white"
+              onClick={() => setSidebarOpen(true)}
+            >
+              Open channels
+            </button>
             <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="opacity-40">
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
             </svg>
@@ -138,6 +220,15 @@ export function ChatPage() {
           </div>
         )}
       </main>
+
+      {membersOpen && activeRoom && (
+        <MembersPanel
+          roomId={activeRoom.id}
+          myUserId={user?.id ?? ''}
+          myRole={myRole}
+          onClose={() => setMembersOpen(false)}
+        />
+      )}
     </div>
   )
 }

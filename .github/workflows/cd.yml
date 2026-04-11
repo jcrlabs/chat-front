@@ -31,9 +31,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push (develop-SHA)
+        env:
+          VITE_TURN_URL: ${{ secrets.VITE_TURN_URL }}
+          VITE_STUN_URL: ${{ secrets.VITE_STUN_URL }}
+          VITE_TURN_USERNAME: ${{ secrets.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
         run: |
           SHA=$(git rev-parse --short HEAD)
-          docker build -t $REGISTRY/$IMAGE:develop-$SHA .
+          docker build \
+            --build-arg VITE_API_URL=https://chat.jcrlabs.net/api \
+            --build-arg VITE_WS_URL=wss://chat.jcrlabs.net/api \
+            --build-arg VITE_STUN_URL="${VITE_STUN_URL}" \
+            --build-arg VITE_TURN_URL="${VITE_TURN_URL}" \
+            --build-arg VITE_TURN_USERNAME="${VITE_TURN_USERNAME}" \
+            --build-arg VITE_TURN_CREDENTIAL="${VITE_TURN_CREDENTIAL}" \
+            -t $REGISTRY/$IMAGE:develop-$SHA .
           docker push $REGISTRY/$IMAGE:develop-$SHA
           echo "SHA=$SHA" >> $GITHUB_ENV
 
@@ -65,8 +77,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push (${{ env.VERSION }})
+        env:
+          VITE_TURN_URL: ${{ secrets.VITE_TURN_URL }}
+          VITE_STUN_URL: ${{ secrets.VITE_STUN_URL }}
+          VITE_TURN_USERNAME: ${{ secrets.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
         run: |
-          docker build -t $REGISTRY/$IMAGE:$VERSION .
+          docker build \
+            --build-arg VITE_API_URL=https://chat.jcrlabs.net/api \
+            --build-arg VITE_WS_URL=wss://chat.jcrlabs.net/api \
+            --build-arg VITE_STUN_URL="${VITE_STUN_URL}" \
+            --build-arg VITE_TURN_URL="${VITE_TURN_URL}" \
+            --build-arg VITE_TURN_USERNAME="${VITE_TURN_USERNAME}" \
+            --build-arg VITE_TURN_CREDENTIAL="${VITE_TURN_CREDENTIAL}" \
+            -t $REGISTRY/$IMAGE:$VERSION .
           docker push $REGISTRY/$IMAGE:$VERSION
 
       - name: Checkout main (to update values-prod.yaml)

@@ -25,16 +25,17 @@ export function RegisterPage() {
       const payload = jwtDecode(access_token)
       setUser({ id: payload.sub, username: payload.username })
       navigate('/')
-    } catch {
-      setError('Registration failed — username or email may already be taken')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setError(msg ?? 'Registration failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-800 p-8">
+    <div className="flex min-h-screen items-center justify-center bg-gray-900 px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-800 p-6 sm:p-8">
         <h1 className="mb-6 text-xl font-bold text-white">Create account</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input label="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />

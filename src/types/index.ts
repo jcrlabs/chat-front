@@ -18,9 +18,12 @@ export interface Room {
   created_at: string
 }
 
+export type MemberRole = 'owner' | 'admin' | 'member'
+
 export interface Member {
   user_id: string
   username: string
+  role: MemberRole
 }
 
 export interface Message {
@@ -56,9 +59,23 @@ export interface DMRoom {
   created_at: string
 }
 
+export type InviteStatus = 'pending' | 'accepted' | 'declined'
+
+export interface RoomInvite {
+  id: string
+  room_id: string
+  inviter_id: string
+  invitee_id: string
+  status: InviteStatus
+  created_at: string
+  room_name?: string
+  inviter_username?: string
+  invitee_username?: string
+}
+
 // WebSocket protocol — must stay in sync with backend ws/protocol.go
 export type WSClientMessageType = 'join_room' | 'leave_room' | 'chat_message' | 'typing'
-export type WSServerMessageType = 'chat_message' | 'typing' | 'presence' | 'room_joined' | 'error'
+export type WSServerMessageType = 'chat_message' | 'typing' | 'presence' | 'room_joined' | 'error' | 'voice_joined' | 'voice_left' | 'voice_offer' | 'voice_answer' | 'ice_candidate' | 'voice_participants'
 
 export interface WSClientMessage {
   type: WSClientMessageType
@@ -79,4 +96,11 @@ export interface WSServerMessage {
   status?: 'online' | 'offline'
   members?: Member[]
   error?: { code: string; message: string }
+  // Voice
+  sdp?: string
+  sdp_type?: string
+  candidate?: string
+  sdp_mid?: string
+  sdp_m_line_index?: number
+  participants?: string[]
 }

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useRooms, useCreateRoom } from '@/hooks/queries/use-rooms'
+import { useRooms, useCreateRoom, useMyInvites, useAcceptInvite, useDeclineInvite } from '@/hooks/queries/use-rooms'
 import { useDMs, useFriendRequests, useFriends, useCreateDM } from '@/hooks/queries/use-friends'
 import { useAuthStore } from '@/store/auth.store'
 import { ProfileModal } from '@/components/chat/ProfileModal'
 import { AddFriendModal } from '@/components/chat/AddFriendModal'
-import type { Room, DMRoom, FriendEntry } from '@/types'
+import { InviteModal } from '@/components/chat/InviteModal'
+import type { Room, DMRoom, FriendEntry, RoomType } from '@/types'
 
 interface Props {
   activeRoomId: string | null
@@ -17,22 +18,28 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
   const { data: dms } = useDMs()
   const { data: friends } = useFriends()
   const { data: friendRequests } = useFriendRequests()
+  const { data: myInvites } = useMyInvites()
   const createRoom = useCreateRoom()
   const createDM = useCreateDM()
+  const acceptInvite = useAcceptInvite()
+  const declineInvite = useDeclineInvite()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState<RoomType>('public')
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showAddFriend, setShowAddFriend] = useState(false)
+  const [inviteRoom, setInviteRoom] = useState<Room | null>(null)
   const [friendsOpen, setFriendsOpen] = useState(true)
   const [dmsOpen, setDmsOpen] = useState(true)
+  const [invitesOpen, setInvitesOpen] = useState(true)
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newName.trim()) return
-    createRoom.mutate({ name: newName.trim() }, {
-      onSuccess: () => { setNewName(''); setShowForm(false) }
+    createRoom.mutate({ name: newName.trim(), type: newType }, {
+      onSuccess: () => { setNewName(''); setNewType('public'); setShowForm(false) }
     })
   }
 
@@ -76,7 +83,7 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
             </div>
 
             {showForm && (
-              <form onSubmit={handleCreate} className="px-2 pb-2">
+              <form onSubmit={handleCreate} className="px-2 pb-2 space-y-1">
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -84,6 +91,25 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                   autoFocus
                   className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]"
                 />
+                <div className="flex items-center gap-2 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setNewType((t) => t === 'public' ? 'private' : 'public')}
+                    className={cn(
+                      'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors',
+                      newType === 'private'
+                        ? 'bg-[#5865f2] text-white'
+                        : 'bg-[#35373c] text-[#949ba4] hover:text-[#dbdee1]',
+                    )}
+                  >
+                    {newType === 'private' ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1C8.676 1 6 3.676 6 7v1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>
+                    )}
+                    {newType === 'private' ? 'Private' : 'Public'}
+                  </button>
+                </div>
               </form>
             )}
 
@@ -92,22 +118,90 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                 <div key={i} className="h-8 animate-pulse rounded bg-[#35373c]" />
               ))}
               {rooms?.filter((r) => r.type !== 'dm').map((room) => (
-                <button
+                <div
                   key={room.id}
-                  onClick={() => onSelect(room)}
                   className={cn(
-                    'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                    'group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors',
                     room.id === activeRoomId
                       ? 'bg-[#404249] text-[#f2f3f5]'
                       : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
                   )}
                 >
-                  <span className="text-[#6d6f78] text-base leading-none">#</span>
-                  <span className="truncate">{room.name}</span>
-                </button>
+                  <button className="flex flex-1 items-center gap-1.5 min-w-0 text-left" onClick={() => onSelect(room)}>
+                    {room.type === 'private' ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]">
+                        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                      </svg>
+                    ) : (
+                      <span className="text-[#6d6f78] text-base leading-none">#</span>
+                    )}
+                    <span className="truncate">{room.name}</span>
+                  </button>
+                  {room.type === 'private' && room.owner_id === user?.id && (
+                    <button
+                      onClick={() => setInviteRoom(room)}
+                      title="Invite user"
+                      className="shrink-0 opacity-0 group-hover:opacity-100 text-[#949ba4] hover:text-[#dbdee1] transition-opacity"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
               ))}
             </nav>
           </div>
+
+          {/* ── Pending Invites ── */}
+          {myInvites && myInvites.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-center justify-between px-4">
+                <button
+                  onClick={() => setInvitesOpen((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
+                >
+                  <svg
+                    width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
+                    className={cn('transition-transform', invitesOpen ? 'rotate-90' : 'rotate-0')}
+                  >
+                    <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Invites
+                  <span className="ml-1 rounded-full bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+                    {myInvites.length}
+                  </span>
+                </button>
+              </div>
+              {invitesOpen && (
+                <div className="space-y-1 px-2">
+                  {myInvites.map((inv) => (
+                    <div key={inv.id} className="rounded bg-[#35373c] px-2 py-2">
+                      <p className="text-xs text-[#dbdee1] truncate mb-1">
+                        <span className="font-medium">{inv.inviter_username}</span>
+                        {' '}invited you to{' '}
+                        <span className="font-medium">#{inv.room_name}</span>
+                      </p>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => acceptInvite.mutate(inv.id)}
+                          className="flex-1 rounded bg-[#3ba55d] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#2d7d46] transition-colors"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => declineInvite.mutate(inv.id)}
+                          className="flex-1 rounded bg-[#404249] px-2 py-1 text-[11px] font-medium text-[#949ba4] hover:bg-[#4e5058] transition-colors"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Friends ── */}
           <div>
@@ -258,6 +352,13 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
+      {inviteRoom && (
+        <InviteModal
+          roomId={inviteRoom.id}
+          roomName={inviteRoom.name}
+          onClose={() => setInviteRoom(null)}
+        />
+      )}
     </>
   )
 }

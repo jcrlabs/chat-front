@@ -3,6 +3,7 @@ import { api } from './client'
 export interface UserProfile {
   id: string
   username: string
+  tag: string
   display_name?: string
   has_avatar: boolean
   email?: string
