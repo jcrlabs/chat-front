@@ -14,7 +14,7 @@ export const useSearchUsers = (q: string) =>
   useQuery({
     queryKey: ['users-search', q],
     queryFn: () => friendsApi.searchUsers(q),
-    enabled: q.length >= 2,
+    enabled: q.includes('#') && q.split('#')[1]?.length > 0,
   })
 
 export const useSendFriendRequest = () => {

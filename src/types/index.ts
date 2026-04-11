@@ -1,6 +1,7 @@
 export interface User {
   id: string
   username: string
+  tag: string
   displayName?: string
   avatarUrl?: string
   email?: string
