@@ -29,6 +29,9 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<RoomType>('public')
   const [showForm, setShowForm] = useState(false)
+  const [voiceNewName, setVoiceNewName] = useState('')
+  const [showVoiceForm, setShowVoiceForm] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(true)
   const [showProfile, setShowProfile] = useState(false)
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [inviteRoom, setInviteRoom] = useState<Room | null>(null)
@@ -41,6 +44,14 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
     if (!newName.trim()) return
     createRoom.mutate({ name: newName.trim(), type: newType }, {
       onSuccess: () => { setNewName(''); setNewType('public'); setShowForm(false) }
+    })
+  }
+
+  const handleCreateVoice = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!voiceNewName.trim()) return
+    createRoom.mutate({ name: voiceNewName.trim(), type: 'voice' }, {
+      onSuccess: () => { setVoiceNewName(''); setShowVoiceForm(false) }
     })
   }
 
@@ -125,7 +136,7 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
               {isLoading && [1, 2, 3].map((i) => (
                 <div key={i} className="h-8 animate-pulse rounded bg-[#35373c]" />
               ))}
-              {rooms?.filter((r) => r.type !== 'dm').map((room) => (
+              {rooms?.filter((r) => r.type === 'public' || r.type === 'private').map((room) => (
                 <div
                   key={room.id}
                   className={cn(
@@ -159,6 +170,76 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                 </div>
               ))}
             </nav>
+          </div>
+
+          {/* ── Voice Channels ── */}
+          <div>
+            <div className="mb-1 flex items-center justify-between px-4">
+              <button
+                onClick={() => setVoiceOpen((v) => !v)}
+                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
+              >
+                <svg
+                  width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
+                  className={cn('transition-transform', voiceOpen ? 'rotate-90' : 'rotate-0')}
+                >
+                  <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Voice Channels
+              </button>
+              <button
+                onClick={() => setShowVoiceForm((v) => !v)}
+                title="Create voice channel"
+                className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                  <path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/>
+                </svg>
+              </button>
+            </div>
+
+            {showVoiceForm && (
+              <form onSubmit={handleCreateVoice} className="px-2 pb-2 space-y-1">
+                <input
+                  value={voiceNewName}
+                  onChange={(e) => setVoiceNewName(e.target.value)}
+                  placeholder="voice-channel"
+                  autoFocus
+                  className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!voiceNewName.trim() || createRoom.isPending}
+                    className="rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors"
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {voiceOpen && (
+              <nav className="space-y-0.5 px-2">
+                {rooms?.filter((r) => r.type === 'voice').map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => onSelect(room)}
+                    className={cn(
+                      'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors',
+                      room.id === activeRoomId
+                        ? 'bg-[#404249] text-[#f2f3f5]'
+                        : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
+                    )}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                    <span className="truncate">{room.name}</span>
+                  </button>
+                ))}
+              </nav>
+            )}
           </div>
 
           {/* ── Pending Invites ── */}
