@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useRooms, useCreateRoom } from '@/hooks/queries/use-rooms'
+import { useDMs, useFriendRequests, useCreateDM } from '@/hooks/queries/use-friends'
 import { useAuthStore } from '@/store/auth.store'
 import { ProfileModal } from '@/components/chat/ProfileModal'
-import type { Room } from '@/types'
+import { AddFriendModal } from '@/components/chat/AddFriendModal'
+import type { Room, DMRoom } from '@/types'
 
 interface Props {
   activeRoomId: string | null
@@ -12,12 +14,16 @@ interface Props {
 
 export function RoomList({ activeRoomId, onSelect }: Props) {
   const { data: rooms, isLoading } = useRooms()
+  const { data: dms } = useDMs()
+  const { data: friendRequests } = useFriendRequests()
   const createRoom = useCreateRoom()
+  const createDM = useCreateDM()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [newName, setNewName] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [showAddFriend, setShowAddFriend] = useState(false)
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,6 +33,13 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
     })
   }
 
+  const handleSelectDM = (dm: DMRoom) => {
+    createDM.mutate(dm.other_user.id, {
+      onSuccess: (room) => onSelect(room),
+    })
+  }
+
+  const pendingCount = friendRequests?.length ?? 0
   const displayName = user?.displayName || user?.username || '?'
   const initial = displayName[0].toUpperCase()
 
@@ -38,8 +51,8 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           <h1 className="flex-1 truncate text-sm font-semibold text-[#f2f3f5]">jcrlabs</h1>
         </div>
 
-        {/* Channels section */}
         <div className="flex-1 overflow-y-auto pt-4">
+          {/* Text Channels */}
           <div className="mb-1 flex items-center justify-between px-4">
             <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
               Text Channels
@@ -67,7 +80,7 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
             </form>
           )}
 
-          <nav className="space-y-0.5 px-2">
+          <nav className="space-y-0.5 px-2 mb-4">
             {isLoading && (
               <>
                 {[1, 2, 3].map((i) => (
@@ -75,7 +88,7 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                 ))}
               </>
             )}
-            {rooms?.map((room) => (
+            {rooms?.filter((r) => r.type !== 'dm').map((room) => (
               <button
                 key={room.id}
                 onClick={() => onSelect(room)}
@@ -90,6 +103,65 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                 <span className="truncate">{room.name}</span>
               </button>
             ))}
+          </nav>
+
+          {/* Direct Messages */}
+          <div className="mb-1 flex items-center justify-between px-4">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+              Direct Messages
+            </span>
+            <button
+              onClick={() => setShowAddFriend(true)}
+              title="Add Friend"
+              className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                <path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/>
+              </svg>
+            </button>
+          </div>
+
+          {pendingCount > 0 && (
+            <button
+              onClick={() => setShowAddFriend(true)}
+              className="mx-2 mb-1 flex w-[calc(100%-16px)] items-center gap-2 rounded px-2 py-1.5 text-sm text-[#f0b132] hover:bg-[#35373c] transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-5 6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm.07 7.84c-.6-.43-1.3-.84-2.1-1.09C2.72 14.46 0 15.5 0 17.5V20h10v-2.5c0-.78-.38-1.44-.93-1.66zm7.93.66C13.07 15.42 10.95 14 8.5 14S3.93 15.42 3 16.5V18h13v-1.5z"/>
+              </svg>
+              <span className="text-xs font-medium">{pendingCount} pending request{pendingCount > 1 ? 's' : ''}</span>
+            </button>
+          )}
+
+          <nav className="space-y-0.5 px-2">
+            {dms?.map((dm) => {
+              const name = dm.other_user.display_name || dm.other_user.username
+              return (
+                <button
+                  key={dm.id}
+                  onClick={() => handleSelectDM(dm)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                    dm.id === activeRoomId
+                      ? 'bg-[#404249] text-[#f2f3f5]'
+                      : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
+                  )}
+                >
+                  {dm.other_user.has_avatar ? (
+                    <img
+                      src={`/api/users/${dm.other_user.id}/avatar`}
+                      alt=""
+                      className="size-6 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#5865f2] text-[10px] font-bold text-white select-none">
+                      {name[0].toUpperCase()}
+                    </div>
+                  )}
+                  <span className="truncate">{name}</span>
+                </button>
+              )
+            })}
           </nav>
         </div>
 
@@ -128,6 +200,7 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
       </aside>
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
     </>
   )
 }
