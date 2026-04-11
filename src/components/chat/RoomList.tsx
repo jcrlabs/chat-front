@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { useRooms, useCreateRoom, useMyInvites, useAcceptInvite, useDeclineInvite } from '@/hooks/queries/use-rooms'
+import { useRooms, useCreateRoom, useDeleteRoom, useRenameRoom, useMyInvites, useAcceptInvite, useDeclineInvite } from '@/hooks/queries/use-rooms'
 import { useDMs, useFriendRequests, useFriends, useCreateDM } from '@/hooks/queries/use-friends'
 import { useAuthStore } from '@/store/auth.store'
 import { ProfileModal } from '@/components/chat/ProfileModal'
@@ -12,15 +12,18 @@ import type { Room, DMRoom, FriendEntry, RoomType } from '@/types'
 interface Props {
   activeRoomId: string | null
   onSelect: (room: Room) => void
+  onRoomDeleted?: (roomId: string) => void
 }
 
-export function RoomList({ activeRoomId, onSelect }: Props) {
+export function RoomList({ activeRoomId, onSelect, onRoomDeleted }: Props) {
   const { data: rooms, isLoading } = useRooms()
   const { data: dms } = useDMs()
   const { data: friends } = useFriends()
   const { data: friendRequests } = useFriendRequests()
   const { data: myInvites } = useMyInvites()
   const createRoom = useCreateRoom()
+  const deleteRoom = useDeleteRoom()
+  const renameRoom = useRenameRoom()
   const createDM = useCreateDM()
   const acceptInvite = useAcceptInvite()
   const declineInvite = useDeclineInvite()
@@ -38,6 +41,8 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
   const [friendsOpen, setFriendsOpen] = useState(true)
   const [dmsOpen, setDmsOpen] = useState(true)
   const [invitesOpen, setInvitesOpen] = useState(true)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,14 +68,94 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
     createDM.mutate(dm.other_user.id, { onSuccess: (room) => onSelect(room) })
   }
 
+  const startRename = (room: Room) => {
+    setRenamingId(room.id)
+    setRenameValue(room.name)
+  }
+
+  const submitRename = (id: string) => {
+    const trimmed = renameValue.trim()
+    if (trimmed) {
+      renameRoom.mutate({ id, name: trimmed }, { onSuccess: () => setRenamingId(null) })
+    } else {
+      setRenamingId(null)
+    }
+  }
+
+  const handleDeleteRoom = (room: Room) => {
+    deleteRoom.mutate(room.id, {
+      onSuccess: () => onRoomDeleted?.(room.id),
+    })
+  }
+
   const pendingCount = friendRequests?.length ?? 0
   const displayName = user?.displayName || user?.username || '?'
   const initial = displayName[0].toUpperCase()
 
+  const RoomRow = ({ room }: { room: Room }) => {
+    const isOwner = room.owner_id === user?.id
+    const isRenaming = renamingId === room.id
+    return (
+      <div
+        className={cn(
+          'group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors',
+          room.id === activeRoomId
+            ? 'bg-[#404249] text-[#f2f3f5]'
+            : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
+        )}
+      >
+        {isRenaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitRename(room.id)
+              if (e.key === 'Escape') setRenamingId(null)
+            }}
+            onBlur={() => submitRename(room.id)}
+            className="flex-1 min-w-0 rounded bg-[#1e1f22] px-1.5 py-0.5 text-sm text-[#dbdee1] outline-none focus:ring-1 focus:ring-[#5865f2]"
+          />
+        ) : (
+          <button className="flex flex-1 items-center gap-1.5 min-w-0 text-left" onClick={() => onSelect(room)}>
+            {room.type === 'private' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            ) : (
+              <span className="text-[#6d6f78] text-base leading-none">#</span>
+            )}
+            <span className="truncate">{room.name}</span>
+          </button>
+        )}
+        {!isRenaming && isOwner && (
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            {room.type === 'private' && (
+              <button onClick={() => setInviteRoom(room)} title="Invite user" className="text-[#949ba4] hover:text-[#dbdee1] p-0.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </button>
+            )}
+            <button onClick={() => startRename(room)} title="Rename" className="text-[#949ba4] hover:text-[#dbdee1] p-0.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            <button onClick={() => handleDeleteRoom(room)} title="Delete" className="text-[#949ba4] hover:text-[#ed4245] p-0.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
       <aside className="flex w-60 shrink-0 flex-col bg-[#2b2d31]">
-        {/* Server header */}
         <div className="flex h-12 items-center border-b border-[#1e1f22] px-4 shadow-sm">
           <h1 className="flex-1 truncate text-sm font-semibold text-[#f2f3f5]">jcrlabs</h1>
         </div>
@@ -80,94 +165,29 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           {/* ── Text Channels ── */}
           <div>
             <div className="mb-1 flex items-center justify-between px-4">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
-                Text Channels
-              </span>
-              <button
-                onClick={() => setShowForm((v) => !v)}
-                title="Create channel"
-                className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none"
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-                  <path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/>
-                </svg>
+              <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">Text Channels</span>
+              <button onClick={() => setShowForm((v) => !v)} title="Create channel" className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/></svg>
               </button>
             </div>
 
             {showForm && (
               <form onSubmit={handleCreate} className="px-2 pb-2 space-y-1">
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="channel-name"
-                  autoFocus
-                  className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]"
-                />
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="channel-name" autoFocus className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]" />
                 <div className="flex items-center gap-2 px-1">
-                  <button
-                    type="button"
-                    onClick={() => setNewType((t) => t === 'public' ? 'private' : 'public')}
-                    className={cn(
-                      'flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors',
-                      newType === 'private'
-                        ? 'bg-[#5865f2] text-white'
-                        : 'bg-[#35373c] text-[#949ba4] hover:text-[#dbdee1]',
-                    )}
-                  >
-                    {newType === 'private' ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-                    ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1C8.676 1 6 3.676 6 7v1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>
-                    )}
+                  <button type="button" onClick={() => setNewType((t) => t === 'public' ? 'private' : 'public')} className={cn('flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors', newType === 'private' ? 'bg-[#5865f2] text-white' : 'bg-[#35373c] text-[#949ba4] hover:text-[#dbdee1]')}>
+                    {newType === 'private' ? <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg> : <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1C8.676 1 6 3.676 6 7v1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>}
                     {newType === 'private' ? 'Private' : 'Public'}
                   </button>
-                  <button
-                    type="submit"
-                    disabled={!newName.trim() || createRoom.isPending}
-                    className="ml-auto rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors"
-                  >
-                    Create
-                  </button>
+                  <button type="submit" disabled={!newName.trim() || createRoom.isPending} className="ml-auto rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors">Create</button>
                 </div>
               </form>
             )}
 
             <nav className="space-y-0.5 px-2">
-              {isLoading && [1, 2, 3].map((i) => (
-                <div key={i} className="h-8 animate-pulse rounded bg-[#35373c]" />
-              ))}
+              {isLoading && [1, 2, 3].map((i) => (<div key={i} className="h-8 animate-pulse rounded bg-[#35373c]" />))}
               {rooms?.filter((r) => r.type === 'public' || r.type === 'private').map((room) => (
-                <div
-                  key={room.id}
-                  className={cn(
-                    'group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors',
-                    room.id === activeRoomId
-                      ? 'bg-[#404249] text-[#f2f3f5]'
-                      : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
-                  )}
-                >
-                  <button className="flex flex-1 items-center gap-1.5 min-w-0 text-left" onClick={() => onSelect(room)}>
-                    {room.type === 'private' ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]">
-                        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-                      </svg>
-                    ) : (
-                      <span className="text-[#6d6f78] text-base leading-none">#</span>
-                    )}
-                    <span className="truncate">{room.name}</span>
-                  </button>
-                  {room.type === 'private' && room.owner_id === user?.id && (
-                    <button
-                      onClick={() => setInviteRoom(room)}
-                      title="Invite user"
-                      className="shrink-0 opacity-0 group-hover:opacity-100 text-[#949ba4] hover:text-[#dbdee1] transition-opacity"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                      </svg>
-                    </button>
-                  )}
-                </div>
+                <RoomRow key={room.id} room={room} />
               ))}
             </nav>
           </div>
@@ -175,69 +195,52 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           {/* ── Voice Channels ── */}
           <div>
             <div className="mb-1 flex items-center justify-between px-4">
-              <button
-                onClick={() => setVoiceOpen((v) => !v)}
-                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
-              >
-                <svg
-                  width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-                  className={cn('transition-transform', voiceOpen ? 'rotate-90' : 'rotate-0')}
-                >
-                  <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+              <button onClick={() => setVoiceOpen((v) => !v)} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={cn('transition-transform', voiceOpen ? 'rotate-90' : 'rotate-0')}><path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Voice Channels
               </button>
-              <button
-                onClick={() => setShowVoiceForm((v) => !v)}
-                title="Create voice channel"
-                className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none"
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-                  <path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/>
-                </svg>
+              <button onClick={() => setShowVoiceForm((v) => !v)} title="Create voice channel" className="text-[#949ba4] hover:text-[#dbdee1] transition-colors leading-none">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><path d="M9 1a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H2a1 1 0 0 1 0-2h6V2a1 1 0 0 1 1-1Z"/></svg>
               </button>
             </div>
 
             {showVoiceForm && (
               <form onSubmit={handleCreateVoice} className="px-2 pb-2 space-y-1">
-                <input
-                  value={voiceNewName}
-                  onChange={(e) => setVoiceNewName(e.target.value)}
-                  placeholder="voice-channel"
-                  autoFocus
-                  className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]"
-                />
+                <input value={voiceNewName} onChange={(e) => setVoiceNewName(e.target.value)} placeholder="voice-channel" autoFocus className="w-full rounded bg-[#1e1f22] px-2 py-1.5 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-1 focus:ring-[#5865f2]" />
                 <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={!voiceNewName.trim() || createRoom.isPending}
-                    className="rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors"
-                  >
-                    Create
-                  </button>
+                  <button type="submit" disabled={!voiceNewName.trim() || createRoom.isPending} className="rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors">Create</button>
                 </div>
               </form>
             )}
 
             {voiceOpen && (
               <nav className="space-y-0.5 px-2">
-                {rooms?.filter((r) => r.type === 'voice').map((room) => (
-                  <button
-                    key={room.id}
-                    onClick={() => onSelect(room)}
-                    className={cn(
-                      'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors',
-                      room.id === activeRoomId
-                        ? 'bg-[#404249] text-[#f2f3f5]'
-                        : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
-                    )}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]">
-                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                    </svg>
-                    <span className="truncate">{room.name}</span>
-                  </button>
-                ))}
+                {rooms?.filter((r) => r.type === 'voice').map((room) => {
+                  const isOwner = room.owner_id === user?.id
+                  const isRenaming = renamingId === room.id
+                  return (
+                    <div key={room.id} className={cn('group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors', room.id === activeRoomId ? 'bg-[#404249] text-[#f2f3f5]' : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]')}>
+                      {isRenaming ? (
+                        <input autoFocus value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitRename(room.id); if (e.key === 'Escape') setRenamingId(null) }} onBlur={() => submitRename(room.id)} className="flex-1 min-w-0 rounded bg-[#1e1f22] px-1.5 py-0.5 text-sm text-[#dbdee1] outline-none focus:ring-1 focus:ring-[#5865f2]" />
+                      ) : (
+                        <button className="flex flex-1 items-center gap-1.5 min-w-0 text-left" onClick={() => onSelect(room)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#6d6f78]"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                          <span className="truncate">{room.name}</span>
+                        </button>
+                      )}
+                      {!isRenaming && isOwner && (
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <button onClick={() => startRename(room)} title="Rename" className="text-[#949ba4] hover:text-[#dbdee1] p-0.5">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                          </button>
+                          <button onClick={() => handleDeleteRoom(room)} title="Delete" className="text-[#949ba4] hover:text-[#ed4245] p-0.5">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </nav>
             )}
           </div>
@@ -246,44 +249,20 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           {myInvites && myInvites.length > 0 && (
             <div>
               <div className="mb-1 flex items-center justify-between px-4">
-                <button
-                  onClick={() => setInvitesOpen((v) => !v)}
-                  className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
-                >
-                  <svg
-                    width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-                    className={cn('transition-transform', invitesOpen ? 'rotate-90' : 'rotate-0')}
-                  >
-                    <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                <button onClick={() => setInvitesOpen((v) => !v)} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={cn('transition-transform', invitesOpen ? 'rotate-90' : 'rotate-0')}><path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Invites
-                  <span className="ml-1 rounded-full bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
-                    {myInvites.length}
-                  </span>
+                  <span className="ml-1 rounded-full bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">{myInvites.length}</span>
                 </button>
               </div>
               {invitesOpen && (
                 <div className="space-y-1 px-2">
                   {myInvites.map((inv) => (
                     <div key={inv.id} className="rounded bg-[#35373c] px-2 py-2">
-                      <p className="text-xs text-[#dbdee1] truncate mb-1">
-                        <span className="font-medium">{inv.inviter_username}</span>
-                        {' '}invited you to{' '}
-                        <span className="font-medium">#{inv.room_name}</span>
-                      </p>
+                      <p className="text-xs text-[#dbdee1] truncate mb-1"><span className="font-medium">{inv.inviter_username}</span>{' '}invited you to{' '}<span className="font-medium">#{inv.room_name}</span></p>
                       <div className="flex gap-1">
-                        <button
-                          onClick={() => acceptInvite.mutate(inv.id)}
-                          className="flex-1 rounded bg-[#3ba55d] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#2d7d46] transition-colors"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => declineInvite.mutate(inv.id)}
-                          className="flex-1 rounded bg-[#404249] px-2 py-1 text-[11px] font-medium text-[#949ba4] hover:bg-[#4e5058] transition-colors"
-                        >
-                          Decline
-                        </button>
+                        <button onClick={() => acceptInvite.mutate(inv.id)} className="flex-1 rounded bg-[#3ba55d] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#2d7d46] transition-colors">Accept</button>
+                        <button onClick={() => declineInvite.mutate(inv.id)} className="flex-1 rounded bg-[#404249] px-2 py-1 text-[11px] font-medium text-[#949ba4] hover:bg-[#4e5058] transition-colors">Decline</button>
                       </div>
                     </div>
                   ))}
@@ -295,57 +274,22 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           {/* ── Friends ── */}
           <div>
             <div className="mb-1 flex items-center justify-between px-4">
-              <button
-                onClick={() => setFriendsOpen((v) => !v)}
-                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
-              >
-                <svg
-                  width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-                  className={cn('transition-transform', friendsOpen ? 'rotate-90' : 'rotate-0')}
-                >
-                  <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+              <button onClick={() => setFriendsOpen((v) => !v)} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={cn('transition-transform', friendsOpen ? 'rotate-90' : 'rotate-0')}><path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Friends
-                {pendingCount > 0 && (
-                  <span className="ml-1 rounded-full bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
-                    {pendingCount}
-                  </span>
-                )}
+                {pendingCount > 0 && <span className="ml-1 rounded-full bg-[#f04747] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">{pendingCount}</span>}
               </button>
-              <button
-                onClick={() => setShowAddFriend(true)}
-                title="Add Friend"
-                className="flex items-center gap-1 rounded bg-[#5865f2] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[#4752c4] transition-colors"
-              >
-                + Add
-              </button>
+              <button onClick={() => setShowAddFriend(true)} title="Add Friend" className="flex items-center gap-1 rounded bg-[#5865f2] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[#4752c4] transition-colors">+ Add</button>
             </div>
-
             {friendsOpen && (
               <nav className="space-y-0.5 px-2">
-                {(!friends || friends.length === 0) && (
-                  <p className="px-2 py-1 text-xs text-[#6d6f78] italic">No friends yet</p>
-                )}
+                {(!friends || friends.length === 0) && <p className="px-2 py-1 text-xs text-[#6d6f78] italic">No friends yet</p>}
                 {friends?.map((entry: FriendEntry) => {
                   const name = entry.user.displayName || entry.user.username
                   return (
-                    <button
-                      key={entry.friendship_id}
-                      onClick={() => handleOpenDM(entry.user.id)}
-                      title={`Message ${name}`}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors"
-                    >
-                      {entry.user.avatarUrl ? (
-                        <img src={`/api/users/${entry.user.id}/avatar`} alt="" className="size-6 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#3ba55d] text-[10px] font-bold text-white select-none">
-                          {name[0].toUpperCase()}
-                        </div>
-                      )}
+                    <button key={entry.friendship_id} onClick={() => handleOpenDM(entry.user.id)} title={`Message ${name}`} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors">
+                      {entry.user.avatarUrl ? <img src={`/api/users/${entry.user.id}/avatar`} alt="" className="size-6 rounded-full object-cover shrink-0" /> : <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#3ba55d] text-[10px] font-bold text-white select-none">{name[0].toUpperCase()}</div>}
                       <span className="truncate">{name}</span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 text-[#949ba4]">
-                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-                      </svg>
                     </button>
                   )
                 })}
@@ -356,45 +300,19 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
           {/* ── Direct Messages ── */}
           <div>
             <div className="mb-1 flex items-center justify-between px-4">
-              <button
-                onClick={() => setDmsOpen((v) => !v)}
-                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors"
-              >
-                <svg
-                  width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-                  className={cn('transition-transform', dmsOpen ? 'rotate-90' : 'rotate-0')}
-                >
-                  <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+              <button onClick={() => setDmsOpen((v) => !v)} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1] transition-colors">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={cn('transition-transform', dmsOpen ? 'rotate-90' : 'rotate-0')}><path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Direct Messages
               </button>
             </div>
-
             {dmsOpen && (
               <nav className="space-y-0.5 px-2">
-                {(!dms || dms.length === 0) && (
-                  <p className="px-2 py-1 text-xs text-[#6d6f78] italic">No conversations yet</p>
-                )}
+                {(!dms || dms.length === 0) && <p className="px-2 py-1 text-xs text-[#6d6f78] italic">No conversations yet</p>}
                 {dms?.map((dm) => {
                   const name = dm.other_user.display_name || dm.other_user.username
                   return (
-                    <button
-                      key={dm.id}
-                      onClick={() => handleSelectDM(dm)}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
-                        dm.id === activeRoomId
-                          ? 'bg-[#404249] text-[#f2f3f5]'
-                          : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]',
-                      )}
-                    >
-                      {dm.other_user.has_avatar ? (
-                        <img src={`/api/users/${dm.other_user.id}/avatar`} alt="" className="size-6 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#5865f2] text-[10px] font-bold text-white select-none">
-                          {name[0].toUpperCase()}
-                        </div>
-                      )}
+                    <button key={dm.id} onClick={() => handleSelectDM(dm)} className={cn('flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors', dm.id === activeRoomId ? 'bg-[#404249] text-[#f2f3f5]' : 'text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]')}>
+                      {dm.other_user.has_avatar ? <img src={`/api/users/${dm.other_user.id}/avatar`} alt="" className="size-6 rounded-full object-cover shrink-0" /> : <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#5865f2] text-[10px] font-bold text-white select-none">{name[0].toUpperCase()}</div>}
                       <span className="truncate">{name}</span>
                     </button>
                   )
@@ -407,48 +325,24 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
 
         {/* User bar */}
         <div className="flex h-[52px] items-center gap-2 bg-[#232428] px-2">
-          <button
-            onClick={() => setShowProfile(true)}
-            className="flex flex-1 min-w-0 items-center gap-2 rounded px-1 py-1 hover:bg-[#35373c] transition-colors"
-          >
+          <button onClick={() => setShowProfile(true)} className="flex flex-1 min-w-0 items-center gap-2 rounded px-1 py-1 hover:bg-[#35373c] transition-colors">
             <div className="relative shrink-0">
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover" />
-              ) : (
-                <div className="flex size-8 items-center justify-center rounded-full bg-[#5865f2] text-xs font-bold text-white select-none">
-                  {initial}
-                </div>
-              )}
+              {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover" /> : <div className="flex size-8 items-center justify-center rounded-full bg-[#5865f2] text-xs font-bold text-white select-none">{initial}</div>}
             </div>
             <div className="flex-1 min-w-0 text-left">
               <p className="truncate text-sm font-medium text-[#f2f3f5] leading-tight">{displayName}</p>
               <p className="truncate text-xs text-[#949ba4] leading-tight">{user?.username}</p>
             </div>
           </button>
-          <button
-            onClick={logout}
-            title="Log out"
-            className="shrink-0 text-[#949ba4] hover:text-[#f04747] transition-colors"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+          <button onClick={logout} title="Log out" className="shrink-0 text-[#949ba4] hover:text-[#f04747] transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
         </div>
       </aside>
 
       {showProfile && createPortal(<ProfileModal onClose={() => setShowProfile(false)} />, document.body)}
       {showAddFriend && createPortal(<AddFriendModal onClose={() => setShowAddFriend(false)} />, document.body)}
-      {inviteRoom && createPortal(
-        <InviteModal
-          roomId={inviteRoom.id}
-          roomName={inviteRoom.name}
-          onClose={() => setInviteRoom(null)}
-        />,
-        document.body,
-      )}
+      {inviteRoom && createPortal(<InviteModal roomId={inviteRoom.id} roomName={inviteRoom.name} onClose={() => setInviteRoom(null)} />, document.body)}
     </>
   )
 }

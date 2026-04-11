@@ -35,6 +35,7 @@ export interface Message {
   avatar_url?: string
   content: string
   created_at: string
+  edited_at?: string
 }
 
 export interface FriendEntry {
@@ -75,7 +76,21 @@ export interface RoomInvite {
 
 // WebSocket protocol — must stay in sync with backend ws/protocol.go
 export type WSClientMessageType = 'join_room' | 'leave_room' | 'chat_message' | 'typing'
-export type WSServerMessageType = 'chat_message' | 'typing' | 'presence' | 'room_joined' | 'error' | 'voice_joined' | 'voice_left' | 'voice_offer' | 'voice_answer' | 'ice_candidate' | 'voice_participants'
+export type WSServerMessageType =
+  | 'chat_message'
+  | 'typing'
+  | 'presence'
+  | 'room_joined'
+  | 'error'
+  | 'message_edited'
+  | 'message_deleted'
+  | 'room_renamed'
+  | 'voice_joined'
+  | 'voice_left'
+  | 'voice_offer'
+  | 'voice_answer'
+  | 'ice_candidate'
+  | 'voice_participants'
 
 export interface WSClientMessage {
   type: WSClientMessageType
@@ -87,12 +102,15 @@ export interface WSClientMessage {
 export interface WSServerMessage {
   type: WSServerMessageType
   room_id?: string
+  message_id?: string
   user_id?: string
   username?: string
   display_name?: string
   avatar_url?: string
   content?: string
   timestamp?: string
+  edited_at?: string
+  name?: string
   status?: 'online' | 'offline'
   members?: Member[]
   error?: { code: string; message: string }
