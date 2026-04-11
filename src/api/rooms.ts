@@ -18,4 +18,6 @@ export const roomsApi = {
     api.put(`/rooms/${roomId}/members/${userId}/role`, { role }),
   kickMember: (roomId: string, userId: string) =>
     api.delete(`/rooms/${roomId}/members/${userId}`),
+  rename: (id: string, name: string) =>
+    api.patch<Room>(`/rooms/${id}`, { name }).then((r) => r.data),
 }

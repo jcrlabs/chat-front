@@ -80,3 +80,11 @@ export function useKickMember() {
     onSuccess: (_d, { roomId }) => qc.invalidateQueries({ queryKey: ['members', roomId] }),
   })
 }
+
+export function useRenameRoom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => roomsApi.rename(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+  })
+}
