@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { useRooms, useCreateRoom, useMyInvites, useAcceptInvite, useDeclineInvite } from '@/hooks/queries/use-rooms'
 import { useDMs, useFriendRequests, useFriends, useCreateDM } from '@/hooks/queries/use-friends'
@@ -108,6 +109,13 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1C8.676 1 6 3.676 6 7v1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>
                     )}
                     {newType === 'private' ? 'Private' : 'Public'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newName.trim() || createRoom.isPending}
+                    className="ml-auto rounded bg-[#5865f2] px-2 py-1 text-xs font-medium text-white hover:bg-[#4752c4] disabled:opacity-40 transition-colors"
+                  >
+                    Create
                   </button>
                 </div>
               </form>
@@ -350,14 +358,15 @@ export function RoomList({ activeRoomId, onSelect }: Props) {
         </div>
       </aside>
 
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
-      {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
-      {inviteRoom && (
+      {showProfile && createPortal(<ProfileModal onClose={() => setShowProfile(false)} />, document.body)}
+      {showAddFriend && createPortal(<AddFriendModal onClose={() => setShowAddFriend(false)} />, document.body)}
+      {inviteRoom && createPortal(
         <InviteModal
           roomId={inviteRoom.id}
           roomName={inviteRoom.name}
           onClose={() => setInviteRoom(null)}
-        />
+        />,
+        document.body,
       )}
     </>
   )

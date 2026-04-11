@@ -82,7 +82,13 @@ export function ChatPage() {
     enabled: !!accessToken,
   })
 
-  const { inVoice, participants, muted, joinVoice, leaveVoice, toggleMute, handleVoiceMessage } = useWebRTC({
+  const {
+    inVoice, participants, muted,
+    devices, micDeviceId, speakerDeviceId,
+    joinVoice, leaveVoice, toggleMute,
+    changeMic, setSpeakerDevice,
+    handleVoiceMessage,
+  } = useWebRTC({
     roomId: activeRoom?.id ?? null,
     myUserId: user?.id ?? '',
     sendWS: send as (msg: object) => void,
@@ -199,6 +205,11 @@ export function ChatPage() {
               <VoicePanel
                 participants={participants}
                 muted={muted}
+                devices={devices}
+                micDeviceId={micDeviceId}
+                speakerDeviceId={speakerDeviceId}
+                onChangeMic={changeMic}
+                onChangeSpeaker={setSpeakerDevice}
                 onToggleMute={toggleMute}
                 onLeave={leaveVoice}
               />

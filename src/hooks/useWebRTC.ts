@@ -7,6 +7,11 @@ export interface VoiceParticipant {
   stream?: MediaStream
 }
 
+export interface AudioDevices {
+  mics: MediaDeviceInfo[]
+  speakers: MediaDeviceInfo[]
+}
+
 interface UseWebRTCOptions {
   roomId: string | null
   myUserId: string
@@ -30,6 +35,9 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
   const [inVoice, setInVoice] = useState(false)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [muted, setMuted] = useState(false)
+  const [devices, setDevices] = useState<AudioDevices>({ mics: [], speakers: [] })
+  const [micDeviceId, setMicDeviceId] = useState('')
+  const [speakerDeviceId, setSpeakerDeviceId] = useState('')
   const localStream = useRef<MediaStream | null>(null)
   const peers = useRef<Map<string, RTCPeerConnection>>(new Map())
 
@@ -49,8 +57,9 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
     }
 
     pc.ontrack = (e) => {
+      const stream = e.streams[0]
       setParticipants((prev) =>
-        prev.map((p) => p.userId === targetUserId ? { ...p, stream: e.streams[0] } : p)
+        prev.map((p) => p.userId === targetUserId ? { ...p, stream } : p)
       )
     }
 
@@ -77,14 +86,26 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
   const joinVoice = useCallback(async () => {
     if (!roomId) return
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      // Enumerate devices before requesting access (labels only available after permission)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : true,
+        video: false,
+      })
       localStream.current = stream
+
+      // Enumerate with labels now that we have permission
+      const all = await navigator.mediaDevices.enumerateDevices()
+      setDevices({
+        mics: all.filter((d) => d.kind === 'audioinput'),
+        speakers: all.filter((d) => d.kind === 'audiooutput'),
+      })
+
       setInVoice(true)
       sendWS({ type: 'voice_join', room_id: roomId })
     } catch {
       alert('Microphone access denied')
     }
-  }, [roomId, sendWS])
+  }, [roomId, sendWS, micDeviceId])
 
   const leaveVoice = useCallback(() => {
     if (!roomId) return
@@ -97,11 +118,30 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
     sendWS({ type: 'voice_leave', room_id: roomId })
   }, [roomId, sendWS])
 
+  // Switch mic while in voice
+  const changeMic = useCallback(async (deviceId: string) => {
+    setMicDeviceId(deviceId)
+    if (!inVoice) return
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: { exact: deviceId } },
+      video: false,
+    })
+    localStream.current?.getTracks().forEach((t) => t.stop())
+    localStream.current = newStream
+    // Replace tracks in all peer connections
+    peers.current.forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
+      if (sender) sender.replaceTrack(newStream.getAudioTracks()[0])
+    })
+    const isMuted = muted
+    newStream.getAudioTracks().forEach((t) => { t.enabled = !isMuted })
+  }, [inVoice, muted])
+
   const toggleMute = useCallback(() => {
     if (!localStream.current) return
-    const enabled = !muted
-    localStream.current.getAudioTracks().forEach((t) => { t.enabled = enabled })
-    setMuted(!enabled)
+    const next = !muted
+    localStream.current.getAudioTracks().forEach((t) => { t.enabled = !next })
+    setMuted(next)
   }, [muted])
 
   const handleVoiceMessage = useCallback(async (msg: WSServerMessage) => {
@@ -113,7 +153,6 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
         username: uid.slice(0, 8),
       }))
       setParticipants(parts)
-      // Initiate connections to existing participants
       for (const uid of msg.participants as string[]) {
         if (uid !== myUserId && !peers.current.has(uid)) {
           const pc = createPeer(uid, false)
@@ -125,7 +164,6 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
     if (msg.type === 'voice_joined' && msg.user_id && msg.user_id.toString() !== myUserId) {
       const uid = msg.user_id.toString()
       setParticipants((prev) => [...prev, { userId: uid, username: msg.username ?? uid }])
-      // Polite peer — wait for offer
       if (!peers.current.has(uid)) {
         const pc = createPeer(uid, true)
         peers.current.set(uid, pc)
@@ -167,5 +205,11 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
     }
   }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { inVoice, participants, muted, joinVoice, leaveVoice, toggleMute, handleVoiceMessage }
+  return {
+    inVoice, participants, muted,
+    devices, micDeviceId, speakerDeviceId,
+    joinVoice, leaveVoice, toggleMute,
+    changeMic, setSpeakerDevice: setSpeakerDeviceId,
+    handleVoiceMessage,
+  }
 }
