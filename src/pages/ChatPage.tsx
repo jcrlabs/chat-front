@@ -99,7 +99,13 @@ export function ChatPage() {
         {activeRoom ? (
           <>
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1e1f22] px-4 shadow-sm">
-              <span className="text-[#80848e] text-lg font-light">#</span>
+              {activeRoom.type === 'dm' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#80848e] shrink-0">
+                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                </svg>
+              ) : (
+                <span className="text-[#80848e] text-lg font-light">#</span>
+              )}
               <h1 className="font-semibold text-[#f2f3f5]">{activeRoom.name}</h1>
               <div className="ml-auto flex items-center gap-2">
                 <span
