@@ -74,7 +74,7 @@ createRoot(document.getElementById('root')!).render(
                 </RequireAuth>
               }
             />
-            <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
+            <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </AuthProvider>
