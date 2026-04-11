@@ -37,7 +37,7 @@ export function MessageInput({ onSend, onTyping, disabled, channelName }: Props)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="shrink-0 px-4 pb-6">
+    <form onSubmit={handleSubmit} className="shrink-0 px-4 pb-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="flex items-center gap-3 rounded-lg bg-[#383a40] px-4 py-3">
         <input
           value={value}

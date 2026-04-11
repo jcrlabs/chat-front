@@ -20,7 +20,7 @@ export function ChatPage() {
   const updateUser = useAuthStore((s) => s.updateUser)
   const accessToken = useAuthStore((s) => s.accessToken)
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
@@ -126,7 +126,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen bg-[#313338] text-[#dcddde]">
+    <div className="flex h-svh bg-[#313338] text-[#dcddde]">
       {/* Sidebar overlay on mobile */}
       {sidebarOpen && (
         <div
@@ -174,24 +174,26 @@ export function ChatPage() {
                 <span className="text-[#80848e] text-lg font-light">#</span>
               )}
               <h1 className="font-semibold text-[#f2f3f5] truncate">{activeRoom.name}</h1>
-              <div className="ml-auto flex items-center gap-2 shrink-0">
+              <div className="ml-auto flex items-center gap-1 shrink-0">
                 <span
                   className={`size-2 rounded-full ${connected ? 'bg-[#3ba55d]' : 'bg-[#80848e]'}`}
                   title={connected ? 'Connected' : 'Disconnected'}
                 />
-                <button
-                  onClick={() => inVoice ? leaveVoice() : joinVoice()}
-                  title={inVoice ? 'Leave voice' : 'Join voice'}
-                  className={`transition-colors ${inVoice ? 'text-[#3ba55d] hover:text-[#f04747]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                  </svg>
-                </button>
+                {activeRoom.type !== 'voice' && (
+                  <button
+                    onClick={() => inVoice ? leaveVoice() : joinVoice()}
+                    title={inVoice ? 'Leave voice' : 'Join voice'}
+                    className={`p-2 rounded transition-colors ${inVoice ? 'text-[#3ba55d] hover:text-[#f04747]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                    </svg>
+                  </button>
+                )}
                 <button
                   onClick={() => setMembersOpen((v) => !v)}
                   title="Members"
-                  className={`text-[#80848e] hover:text-[#dbdee1] transition-colors ${membersOpen ? 'text-[#dbdee1]' : ''}`}
+                  className={`p-2 rounded transition-colors hover:bg-[#35373c] ${membersOpen ? 'text-[#dbdee1]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
@@ -266,12 +268,20 @@ export function ChatPage() {
       </main>
 
       {membersOpen && activeRoom && (
-        <MembersPanel
-          roomId={activeRoom.id}
-          myUserId={user?.id ?? ''}
-          myRole={myRole}
-          onClose={() => setMembersOpen(false)}
-        />
+        <>
+          <div
+            className="fixed inset-0 z-20 bg-black/50 md:hidden"
+            onClick={() => setMembersOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-30 md:static md:z-auto">
+            <MembersPanel
+              roomId={activeRoom.id}
+              myUserId={user?.id ?? ''}
+              myRole={myRole}
+              onClose={() => setMembersOpen(false)}
+            />
+          </div>
+        </>
       )}
     </div>
   )

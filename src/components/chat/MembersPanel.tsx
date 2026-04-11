@@ -34,7 +34,7 @@ export function MembersPanel({ roomId, myUserId, myRole, onClose }: Props) {
   const canManage = myRole === 'owner' || myRole === 'admin'
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col bg-[#2b2d31] border-l border-[#1e1f22]">
+    <aside className="flex h-full w-56 shrink-0 flex-col bg-[#2b2d31] border-l border-[#1e1f22]">
       <div className="flex h-12 items-center justify-between border-b border-[#1e1f22] px-4">
         <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
           Members — {members.length}
@@ -62,7 +62,7 @@ export function MembersPanel({ roomId, myUserId, myRole, onClose }: Props) {
                 </div>
               </div>
               {canAct && (
-                <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100">
                   {myRole === 'owner' && m.role === 'member' && (
                     <button
                       onClick={() => setRole.mutate({ roomId, userId: m.user_id, role: 'admin' })}
