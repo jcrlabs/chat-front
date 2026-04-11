@@ -18,7 +18,7 @@ let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown
 
 const processQueue = (error: unknown, token: string | null) => {
   failedQueue.forEach(({ resolve, reject }) => {
-    error ? reject(error) : resolve(token!)
+    if (error) { reject(error) } else { resolve(token!) }
   })
   failedQueue = []
 }

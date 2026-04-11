@@ -172,7 +172,7 @@ function MessageList({ roomId, liveMessages, userId }: { roomId: string; liveMes
     if (liveMessages.length > 0) {
       virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'smooth' })
     }
-  }, [liveMessages.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [liveMessages.length])
 
   if (isLoading) return <MessageSkeleton />
 
