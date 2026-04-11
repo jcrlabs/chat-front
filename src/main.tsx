@@ -49,13 +49,6 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function RequireAdmin({ children }: { children: React.ReactNode }) {
-  const accessToken = useAuthStore((s) => s.accessToken)
-  const isAdmin = useAuthStore((s) => s.user?.isAdmin)
-  if (!accessToken) return <Navigate to="/login" replace />
-  if (!isAdmin) return <Navigate to="/" replace />
-  return <>{children}</>
-}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
