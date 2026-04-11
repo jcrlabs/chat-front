@@ -177,6 +177,11 @@ export function ChatPage() {
           activeRoomId={activeRoom?.id ?? null}
           onSelect={handleSelectRoom}
           onRoomDeleted={handleRoomDeleted}
+          devices={devices}
+          micDeviceId={micDeviceId}
+          speakerDeviceId={speakerDeviceId}
+          onChangeMic={changeMic}
+          onChangeSpeaker={setSpeakerDevice}
         />
       </div>
 

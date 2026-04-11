@@ -2,6 +2,7 @@ interface JWTPayload {
   sub: string
   username: string
   exp: number
+  is_admin?: boolean
 }
 
 export function jwtDecode(token: string): JWTPayload {

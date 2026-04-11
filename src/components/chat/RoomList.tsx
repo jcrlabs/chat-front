@@ -8,14 +8,20 @@ import { ProfileModal } from '@/components/chat/ProfileModal'
 import { AddFriendModal } from '@/components/chat/AddFriendModal'
 import { InviteModal } from '@/components/chat/InviteModal'
 import type { Room, DMRoom, FriendEntry, RoomType } from '@/types'
+import type { AudioDevices } from '@/hooks/useWebRTC'
 
 interface Props {
   activeRoomId: string | null
   onSelect: (room: Room) => void
   onRoomDeleted?: (roomId: string) => void
+  devices?: AudioDevices
+  micDeviceId?: string
+  speakerDeviceId?: string
+  onChangeMic?: (id: string) => void
+  onChangeSpeaker?: (id: string) => void
 }
 
-export function RoomList({ activeRoomId, onSelect, onRoomDeleted }: Props) {
+export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDeviceId = '', speakerDeviceId = '', onChangeMic, onChangeSpeaker }: Props) {
   const { data: rooms, isLoading } = useRooms()
   const { data: dms } = useDMs()
   const { data: friends } = useFriends()
@@ -43,6 +49,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted }: Props) {
   const [invitesOpen, setInvitesOpen] = useState(true)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -323,6 +330,31 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted }: Props) {
 
         </div>
 
+        {/* Settings panel */}
+        {showSettings && (
+          <div className="border-t border-[#1e1f22] bg-[#232428] px-3 py-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">Audio Settings</p>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">Microphone</label>
+              <select value={micDeviceId} onChange={(e) => onChangeMic?.(e.target.value)} className="w-full rounded bg-[#1e1f22] px-2 py-1 text-xs text-[#dbdee1] outline-none focus:ring-1 focus:ring-[#5865f2]">
+                {(!devices || devices.mics.length === 0) && <option value="">Default</option>}
+                {devices?.mics.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${d.deviceId.slice(0, 8)}`}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">Speaker</label>
+              <select value={speakerDeviceId} onChange={(e) => onChangeSpeaker?.(e.target.value)} className="w-full rounded bg-[#1e1f22] px-2 py-1 text-xs text-[#dbdee1] outline-none focus:ring-1 focus:ring-[#5865f2]">
+                <option value="">Default</option>
+                {devices?.speakers.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Speaker ${d.deviceId.slice(0, 8)}`}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* User bar */}
         <div className="flex h-[52px] items-center gap-2 bg-[#232428] px-2">
           <button onClick={() => setShowProfile(true)} className="flex flex-1 min-w-0 items-center gap-2 rounded px-1 py-1 hover:bg-[#35373c] transition-colors">
@@ -333,6 +365,9 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted }: Props) {
               <p className="truncate text-sm font-medium text-[#f2f3f5] leading-tight">{displayName}</p>
               <p className="truncate text-xs text-[#949ba4] leading-tight">{user?.username}</p>
             </div>
+          </button>
+          <button onClick={() => setShowSettings((v) => !v)} title="Settings" className={cn('shrink-0 transition-colors', showSettings ? 'text-[#dbdee1]' : 'text-[#949ba4] hover:text-[#dbdee1]')}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           </button>
           <button onClick={logout} title="Log out" className="shrink-0 text-[#949ba4] hover:text-[#f04747] transition-colors">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

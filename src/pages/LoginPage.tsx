@@ -22,7 +22,7 @@ export function LoginPage() {
       const { access_token } = await authApi.login(email, password)
       setTokens(access_token)
       const payload = jwtDecode(access_token)
-      setUser({ id: payload.sub, username: payload.username })
+      setUser({ id: payload.sub, username: payload.username, isAdmin: payload.is_admin ?? false })
       navigate('/')
     } catch {
       setError('Invalid email or password')

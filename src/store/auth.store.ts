@@ -6,6 +6,7 @@ interface AuthUser {
   username: string
   displayName?: string
   avatarUrl?: string
+  isAdmin?: boolean
 }
 
 interface AuthState {
