@@ -36,6 +36,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const [inVoice, setInVoice] = useState(false)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [muted, setMuted] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
   const [devices, setDevices] = useState<AudioDevices>({ mics: [], speakers: [] })
   const [micDeviceId, setMicDeviceId] = useState('')
   const [speakerDeviceId, setSpeakerDeviceId] = useState('')
@@ -86,15 +87,14 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
   const joinVoice = useCallback(async () => {
     if (!roomId) return
+    setMicError(null)
     try {
-      // Enumerate devices before requesting access (labels only available after permission)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : true,
         video: false,
       })
       localStream.current = stream
 
-      // Enumerate with labels now that we have permission
       const all = await navigator.mediaDevices.enumerateDevices()
       setDevices({
         mics: all.filter((d) => d.kind === 'audioinput'),
@@ -103,8 +103,15 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
       setInVoice(true)
       sendWS({ type: 'voice_join', room_id: roomId })
-    } catch {
-      alert('Microphone access denied')
+    } catch (err) {
+      const name = (err as DOMException)?.name
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setMicError('denied')
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        setMicError('notfound')
+      } else {
+        setMicError('unknown')
+      }
     }
   }, [roomId, sendWS, micDeviceId])
 
@@ -222,7 +229,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   }, [roomId]) // intentional: only cleanup when room changes
 
   return {
-    inVoice, participants, muted,
+    inVoice, participants, muted, micError,
     devices, micDeviceId, speakerDeviceId,
     joinVoice, leaveVoice, toggleMute,
     changeMic, setSpeakerDevice: setSpeakerDeviceId,
