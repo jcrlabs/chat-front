@@ -1,20 +1,17 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAuthStore } from '@/store/auth.store'
 import { jwtDecode } from '@/lib/jwt'
+import { queryClient } from '@/lib/queryClient'
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { ChatPage } from '@/pages/ChatPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { AdminPage } from '@/pages/AdminPage'
 import './index.css'
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
-})
 
 // On hard refresh, accessToken is lost (not persisted). If user is in store,
 // attempt a silent token refresh before rendering any route.
@@ -35,7 +32,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         setTokens(res.data.access_token)
         updateUser({ isAdmin: payload.is_admin ?? false })
       })
-      .catch(() => logout())
+      .catch(() => { queryClient.clear(); logout() })
       .finally(() => setReady(true))
   }, [])
 
