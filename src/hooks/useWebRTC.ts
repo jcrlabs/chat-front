@@ -16,6 +16,7 @@ interface UseWebRTCOptions {
   roomId: string | null
   myUserId: string
   sendWS: (msg: object) => void
+  connected: boolean
 }
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -31,7 +32,7 @@ const ICE_SERVERS: RTCIceServer[] = [
     : []),
 ]
 
-export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
+export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOptions) {
   const [inVoice, setInVoice] = useState(false)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [muted, setMuted] = useState(false)
@@ -197,6 +198,21 @@ export function useWebRTC({ roomId, myUserId, sendWS }: UseWebRTCOptions) {
       if (pc) await pc.addIceCandidate({ candidate: msg.candidate, sdpMid: msg.sdp_mid, sdpMLineIndex: msg.sdp_m_line_index })
     }
   }, [roomId, myUserId, createPeer, sendWS])
+
+  // When WS disconnects, the server removes us from all voice rooms.
+  // Reset local voice state so joinVoice() fires again on reconnect.
+  const prevConnectedRef = useRef(false)
+  useEffect(() => {
+    if (!connected && prevConnectedRef.current) {
+      localStream.current?.getTracks().forEach((t) => t.stop())
+      localStream.current = null
+      peers.current.forEach((pc) => pc.close())
+      peers.current.clear()
+      setParticipants([])
+      setInVoice(false)
+    }
+    prevConnectedRef.current = connected
+  }, [connected])
 
   // Cleanup on room change
   useEffect(() => {

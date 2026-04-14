@@ -11,12 +11,17 @@ export function useWebSocket(url: string, { onMessage, enabled = true }: UseWebS
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectDelay = useRef(1000)
   const onMessageRef = useRef(onMessage)
+  // Tracks whether the current effect instance is still active.
+  // Prevents stale closures in ws.onclose from scheduling reconnects
+  // after the url/enabled changed (e.g. token refreshed, logout).
+  const activeRef = useRef(false)
   onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
-    if (!enabled) return
+    if (!enabled || !url) return
 
     const ws = new WebSocket(url)
+    wsRef.current = ws
 
     ws.onopen = () => {
       setConnected(true)
@@ -35,19 +40,20 @@ export function useWebSocket(url: string, { onMessage, enabled = true }: UseWebS
     ws.onclose = () => {
       setConnected(false)
       wsRef.current = null
+      if (!activeRef.current) return
       const delay = reconnectDelay.current
       reconnectDelay.current = Math.min(delay * 2, 30_000)
       setTimeout(connect, delay)
     }
 
     ws.onerror = () => ws.close()
-
-    wsRef.current = ws
   }, [url, enabled])
 
   useEffect(() => {
+    activeRef.current = true
     connect()
     return () => {
+      activeRef.current = false
       wsRef.current?.close()
     }
   }, [connect])
