@@ -11,19 +11,20 @@ export function useWebSocket(url: string, { onMessage, enabled = true }: UseWebS
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectDelay = useRef(1000)
   const onMessageRef = useRef(onMessage)
-  // Tracks whether the current effect instance is still active.
-  // Prevents stale closures in ws.onclose from scheduling reconnects
-  // after the url/enabled changed (e.g. token refreshed, logout).
-  const activeRef = useRef(false)
+  // Each connect() call gets a generation number. The cleanup increments it,
+  // invalidating any in-flight onclose/onopen callbacks from the old connection.
+  const generationRef = useRef(0)
   onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
     if (!enabled || !url) return
 
+    const myGen = ++generationRef.current
     const ws = new WebSocket(url)
     wsRef.current = ws
 
     ws.onopen = () => {
+      if (generationRef.current !== myGen) return
       setConnected(true)
       reconnectDelay.current = 1000
     }
@@ -38,9 +39,10 @@ export function useWebSocket(url: string, { onMessage, enabled = true }: UseWebS
     }
 
     ws.onclose = () => {
+      // If generation changed, a newer connection already took over — ignore.
+      if (generationRef.current !== myGen) return
       setConnected(false)
       wsRef.current = null
-      if (!activeRef.current) return
       const delay = reconnectDelay.current
       reconnectDelay.current = Math.min(delay * 2, 30_000)
       setTimeout(connect, delay)
@@ -50,11 +52,13 @@ export function useWebSocket(url: string, { onMessage, enabled = true }: UseWebS
   }, [url, enabled])
 
   useEffect(() => {
-    activeRef.current = true
     connect()
     return () => {
-      activeRef.current = false
+      // Bump generation to invalidate callbacks from the current WS.
+      generationRef.current++
       wsRef.current?.close()
+      wsRef.current = null
+      setConnected(false)
     }
   }, [connect])
 

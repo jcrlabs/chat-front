@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAuthStore } from '@/store/auth.store'
@@ -274,16 +274,15 @@ function MessageList({ roomId, liveMessages, userId, myRole, isAdmin, onEdit, on
     overscan: 10,
   })
 
-  // Scroll to bottom on initial load (once per mount, i.e. per room change)
+  // Scroll to bottom on initial load (once per mount = once per room, key={activeRoom.id}).
+  // useLayoutEffect + scrollTop avoids the rAF timing issues with the virtualizer.
   const initialScrollDone = useRef(false)
-  useEffect(() => {
-    if (data && !initialScrollDone.current && allMessages.length > 0) {
+  useLayoutEffect(() => {
+    if (data && !initialScrollDone.current && allMessages.length > 0 && parentRef.current) {
       initialScrollDone.current = true
-      requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'auto' })
-      })
+      parentRef.current.scrollTop = parentRef.current.scrollHeight
     }
-  }, [data?.pages.length])
+  }, [!!data, allMessages.length])
 
   useEffect(() => {
     if (liveMessages.length > 0) virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'smooth' })
