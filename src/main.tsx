@@ -23,7 +23,11 @@ function doRefresh(setTokens: (t: string) => void, updateUser: (u: { isAdmin: bo
       setTokens(res.data.access_token)
       updateUser({ isAdmin: payload.is_admin ?? false })
     })
-    .catch(() => { queryClient.clear(); logout() })
+    .catch((err) => {
+      // Only logout if the refresh token is explicitly rejected (401).
+      // Network errors, 429, 5xx are transient — keep the session alive.
+      if (err?.response?.status === 401) { queryClient.clear(); logout() }
+    })
 }
 
 // On hard refresh, accessToken is lost (not persisted). If user is in store,
