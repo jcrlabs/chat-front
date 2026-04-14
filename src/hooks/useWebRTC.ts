@@ -106,7 +106,12 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     } catch (err) {
       const name = (err as DOMException)?.name
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        setMicError('denied')
+        try {
+          const perm = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+          setMicError(perm.state === 'denied' ? 'denied-permanent' : 'denied')
+        } catch {
+          setMicError('denied')
+        }
       } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
         setMicError('notfound')
       } else {
