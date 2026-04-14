@@ -85,7 +85,7 @@ export function ChatPage() {
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
   const { inVoice, participants, muted, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
-    roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void,
+    roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
 
   useEffect(() => {
@@ -197,6 +197,7 @@ export function ChatPage() {
             ) : (
               <>
                 <MessageList
+                  key={activeRoom.id}
                   roomId={activeRoom.id} liveMessages={liveMessages}
                   userId={user?.id ?? ''} myRole={myRole} isAdmin={user?.isAdmin ?? false}
                   onEdit={(id, content) => editMessage.mutate({ messageId: id, content, roomId: activeRoom.id })}
@@ -272,6 +273,17 @@ function MessageList({ roomId, liveMessages, userId, myRole, isAdmin, onEdit, on
     },
     overscan: 10,
   })
+
+  // Scroll to bottom on initial load (once per mount, i.e. per room change)
+  const initialScrollDone = useRef(false)
+  useEffect(() => {
+    if (data && !initialScrollDone.current && allMessages.length > 0) {
+      initialScrollDone.current = true
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'auto' })
+      })
+    }
+  }, [data?.pages.length])
 
   useEffect(() => {
     if (liveMessages.length > 0) virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'smooth' })
