@@ -20,6 +20,7 @@ interface Props {
   speakerDeviceId?: string
   onChangeMic?: (id: string) => void
   onChangeSpeaker?: (id: string) => void
+  unreadCounts?: Record<string, number>
 }
 
 const S = {
@@ -41,7 +42,7 @@ function Avatar({ name, url, size = 7 }: { name: string; url?: string | null; si
   return <div className={cls} style={{ background: color }}>{name[0].toUpperCase()}</div>
 }
 
-export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDeviceId = '', speakerDeviceId = '', onChangeMic, onChangeSpeaker }: Props) {
+export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDeviceId = '', speakerDeviceId = '', onChangeMic, onChangeSpeaker, unreadCounts = {} }: Props) {
   const { data: rooms, isLoading } = useRooms()
   const { data: dms } = useDMs()
   const { data: friends } = useFriends()
@@ -139,6 +140,11 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
               ) : '#'}
             </span>
             <span className="truncate text-sm">{room.name}</span>
+            {(unreadCounts[room.id] ?? 0) > 0 && (
+              <span className={S.badge} style={{ background: 'var(--primary)' }}>
+                {unreadCounts[room.id] > 99 ? '99+' : unreadCounts[room.id]}
+              </span>
+            )}
           </button>
         )}
         {!isRenaming && canManage && (
@@ -414,6 +420,11 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
                       onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = '')}>
                       <Avatar name={name} url={avatarUrl} size={6} />
                       <span className="truncate text-sm">{name}</span>
+                      {(unreadCounts[dm.id] ?? 0) > 0 && (
+                        <span className={S.badge} style={{ background: 'var(--primary)' }}>
+                          {unreadCounts[dm.id] > 99 ? '99+' : unreadCounts[dm.id]}
+                        </span>
+                      )}
                     </button>
                   )
                 })}

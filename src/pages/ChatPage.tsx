@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAuthStore } from '@/store/auth.store'
@@ -26,6 +26,7 @@ export function ChatPage() {
   const [membersOpen, setMembersOpen] = useState(false)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const { data: roomMembers } = useRoomMembers(activeRoom?.id ?? null)
   const myRole: MemberRole = roomMembers?.find((m) => m.user_id === user?.id)?.role ?? 'member'
@@ -46,13 +47,17 @@ export function ChatPage() {
     : ''
 
   const handleWSMessage = useCallback((msg: WSServerMessage) => {
-    if (msg.type === 'chat_message' && msg.room_id === activeRoom?.id) {
-      setLiveMessages((prev) => [...prev, {
-        id: msg.message_id ?? `live-${msg.user_id}-${msg.timestamp}-${Math.random()}`,
-        room_id: msg.room_id!, user_id: msg.user_id!, username: msg.username!,
-        display_name: msg.display_name, avatar_url: msg.avatar_url,
-        content: msg.content!, created_at: msg.timestamp!,
-      }])
+    if (msg.type === 'chat_message') {
+      if (msg.room_id === activeRoom?.id) {
+        setLiveMessages((prev) => [...prev, {
+          id: msg.message_id ?? `live-${msg.user_id}-${msg.timestamp}-${Math.random()}`,
+          room_id: msg.room_id!, user_id: msg.user_id!, username: msg.username!,
+          display_name: msg.display_name, avatar_url: msg.avatar_url,
+          content: msg.content!, created_at: msg.timestamp!,
+        }])
+      } else if (msg.room_id) {
+        setUnreadCounts((prev) => ({ ...prev, [msg.room_id!]: (prev[msg.room_id!] ?? 0) + 1 }))
+      }
       return
     }
     if (msg.type === 'message_edited' && msg.room_id === activeRoom?.id && msg.message_id) {
@@ -104,6 +109,7 @@ export function ChatPage() {
     setActiveRoom(room)
     setTypingUsernames([])
     setSidebarOpen(false)
+    setUnreadCounts((prev) => { const next = { ...prev }; delete next[room.id]; return next })
   }
 
   return (
@@ -125,6 +131,7 @@ export function ChatPage() {
           onRoomDeleted={(id) => { if (activeRoom?.id === id) setActiveRoom(null) }}
           devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
           onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
+          unreadCounts={unreadCounts}
         />
       </div>
 
@@ -301,10 +308,13 @@ function MessageList({ roomId, liveMessages, userId, myRole, isAdmin, onEdit, on
   const parentRef = useRef<HTMLDivElement>(null)
   const CONT_MS = 5 * 60 * 1000
 
-  const allMessages = [
-    ...(data?.pages.slice().reverse().flatMap((p) => [...p].reverse()) ?? []),
-    ...liveMessages,
-  ]
+  const allMessages = useMemo(() => {
+    const paged = data?.pages.slice().reverse().flatMap((p) => [...p].reverse()) ?? []
+    const seen = new Set<string>()
+    return [...paged, ...liveMessages]
+      .filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true })
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  }, [data, liveMessages])
 
   const virtualizer = useVirtualizer({
     count: allMessages.length,
