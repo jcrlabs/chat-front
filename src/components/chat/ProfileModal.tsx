@@ -13,7 +13,10 @@ function CopyTag({ value }: { value: string }) {
     <button
       onClick={copy}
       title="Copy tag"
-      className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[#5865f2] hover:bg-[#5865f220] transition-colors"
+      className="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors"
+      style={{ color: 'var(--primary)' }}
+      onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--primary) 12%, transparent)'}
+      onMouseLeave={(e) => e.currentTarget.style.background = ''}
     >
       {copied ? (
         'Copied!'
@@ -64,9 +67,12 @@ export function ProfileModal({ onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-sm mx-4 rounded-lg bg-[#313338] shadow-xl">
+      <div
+        className="w-full max-w-sm mx-4 rounded-lg shadow-xl"
+        style={{ background: 'var(--surface2)' }}
+      >
         {/* Header banner */}
-        <div className="h-20 rounded-t-lg bg-[#5865f2]" />
+        <div className="h-20 rounded-t-lg" style={{ background: 'var(--primary)' }} />
 
         {/* Avatar */}
         <div className="relative -mt-10 px-4">
@@ -76,11 +82,17 @@ export function ProfileModal({ onClose }: Props) {
             className="group relative inline-block"
             title="Change avatar"
           >
-            <div className="size-20 overflow-hidden rounded-full ring-4 ring-[#313338]">
+            <div
+              className="size-20 overflow-hidden rounded-full ring-4"
+              style={{ ringColor: 'var(--surface2)' } as React.CSSProperties}
+            >
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="size-full object-cover" />
               ) : (
-                <div className="flex size-full items-center justify-center bg-[#5865f2] text-2xl font-bold text-white">
+                <div
+                  className="flex size-full items-center justify-center text-2xl font-bold text-white"
+                  style={{ background: 'var(--primary)' }}
+                >
                   {initial}
                 </div>
               )}
@@ -103,7 +115,7 @@ export function ProfileModal({ onClose }: Props) {
         {/* Fields */}
         <div className="space-y-4 p-4 pt-3">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text2)' }}>
               Display Name
             </label>
             <input
@@ -111,42 +123,54 @@ export function ProfileModal({ onClose }: Props) {
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={32}
               placeholder={user?.username}
-              className="w-full rounded bg-[#1e1f22] px-3 py-2 text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none focus:ring-2 focus:ring-[#5865f2]"
+              className="w-full rounded px-3 py-2 text-sm outline-none transition-colors"
+              style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}
+              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
+              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
             />
-            <p className="mt-1 text-xs text-[#949ba4]">
+            <p className="mt-1 text-xs" style={{ color: 'var(--text2)' }}>
               Shown in chat instead of your username
             </p>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text2)' }}>
               Username &amp; Tag
             </label>
-            <div className="flex items-center rounded bg-[#1e1f22] px-3 py-2 text-sm text-[#6d6f78]">
+            <div
+              className="flex items-center rounded px-3 py-2 text-sm"
+              style={{ background: 'var(--surface)', color: 'var(--text3)', border: '1px solid var(--border)' }}
+            >
               <span>
                 {user?.username}
                 {profile?.tag && (
-                  <span className="text-[#5865f2]">#{profile.tag}</span>
+                  <span style={{ color: 'var(--primary)' }}>#{profile.tag}</span>
                 )}
               </span>
               {profile?.tag && (
                 <CopyTag value={`${user?.username}#${profile.tag}`} />
               )}
             </div>
-            <p className="mt-1 text-xs text-[#949ba4]">Share this tag so others can find you</p>
+            <p className="mt-1 text-xs" style={{ color: 'var(--text2)' }}>Share this tag so others can find you</p>
           </div>
 
           <div className="flex gap-2 pt-1">
             <button
               onClick={onClose}
-              className="flex-1 rounded bg-[#4e505880] py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#6d6f7880] transition-colors"
+              className="flex-1 rounded py-2 text-sm font-medium transition-colors"
+              style={{ background: 'var(--surface3)', color: 'var(--text)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface3)'}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={updateProfile.isPending}
-              className="flex-1 rounded bg-[#5865f2] py-2 text-sm font-medium text-white hover:bg-[#4752c4] disabled:opacity-50 transition-colors"
+              className="flex-1 rounded py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+              style={{ background: 'var(--primary)' }}
+              onMouseEnter={(e) => !updateProfile.isPending && (e.currentTarget.style.background = 'var(--primary-h)')}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--primary)'}
             >
               {saved ? 'Saved!' : updateProfile.isPending ? 'Saving…' : 'Save'}
             </button>
