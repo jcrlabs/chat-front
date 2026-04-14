@@ -13,6 +13,19 @@ import { RegisterPage } from '@/pages/RegisterPage'
 import { AdminPage } from '@/pages/AdminPage'
 import './index.css'
 
+const API_URL = import.meta.env.VITE_API_URL ?? '/api'
+
+function doRefresh(setTokens: (t: string) => void, updateUser: (u: { isAdmin: boolean }) => void, logout: () => void) {
+  return axios
+    .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
+    .then((res) => {
+      const payload = jwtDecode(res.data.access_token)
+      setTokens(res.data.access_token)
+      updateUser({ isAdmin: payload.is_admin ?? false })
+    })
+    .catch(() => { queryClient.clear(); logout() })
+}
+
 // On hard refresh, accessToken is lost (not persisted). If user is in store,
 // attempt a silent token refresh before rendering any route.
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -23,18 +36,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useAuthStore((s) => s.logout)
   const [ready, setReady] = useState(!user || !!accessToken)
 
+  // Silent refresh on page load (accessToken not persisted).
   useEffect(() => {
     if (!user || accessToken) return
-    axios
-      .post(`${import.meta.env.VITE_API_URL ?? '/api'}/auth/refresh`, {}, { withCredentials: true })
-      .then((res) => {
-        const payload = jwtDecode(res.data.access_token)
-        setTokens(res.data.access_token)
-        updateUser({ isAdmin: payload.is_admin ?? false })
-      })
-      .catch(() => { queryClient.clear(); logout() })
-      .finally(() => setReady(true))
+    doRefresh(setTokens, updateUser, logout).finally(() => setReady(true))
   }, [])
+
+  // Proactive refresh: schedule 1 min before expiry so WS token never expires mid-session.
+  useEffect(() => {
+    if (!accessToken) return
+    let timer: ReturnType<typeof setTimeout>
+    try {
+      const { exp } = jwtDecode(accessToken)
+      const msLeft = exp * 1000 - Date.now() - 60_000 // 1 min early
+      if (msLeft <= 0) {
+        doRefresh(setTokens, updateUser, logout)
+        return
+      }
+      timer = setTimeout(() => doRefresh(setTokens, updateUser, logout), msLeft)
+    } catch { /* malformed token — leave it to the server to reject */ }
+    return () => clearTimeout(timer)
+  }, [accessToken])
 
   if (!ready) return <div className="min-h-screen bg-[#313338]" />
   return <>{children}</>
