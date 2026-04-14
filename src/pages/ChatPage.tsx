@@ -84,7 +84,7 @@ export function ChatPage() {
   }, [activeRoom, user?.id, qc])
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
-  const { inVoice, participants, muted, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
+  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
     roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
 
@@ -190,6 +190,33 @@ export function ChatPage() {
                     micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
                     onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
                     onToggleMute={toggleMute} onLeave={leaveVoice} />
+                ) : micError ? (
+                  <div className="flex flex-col items-center gap-3 rounded-2xl p-6 max-w-sm text-center"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex size-12 items-center justify-center rounded-full" style={{ background: '#ef44441a' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--danger)' }}>
+                        <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                      </svg>
+                    </div>
+                    <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
+                      {micError === 'notfound' ? 'No microphone found' : 'Microphone access blocked'}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--text3)' }}>
+                      {micError === 'notfound'
+                        ? 'Connect a microphone or headset and try again.'
+                        : 'Allow microphone access in your browser settings, then click Retry.'}
+                    </p>
+                    {micError !== 'notfound' && (
+                      <p className="text-xs" style={{ color: 'var(--text3)' }}>
+                        In Chrome: click the lock icon in the address bar → Microphone → Allow.
+                      </p>
+                    )}
+                    <button onClick={joinVoice}
+                      className="mt-1 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+                      style={{ background: 'var(--primary)' }}>
+                      Retry
+                    </button>
+                  </div>
                 ) : (
                   <p className="text-sm animate-pulse" style={{ color: 'var(--text3)' }}>Joining voice…</p>
                 )}
