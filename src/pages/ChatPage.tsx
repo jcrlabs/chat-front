@@ -47,79 +47,45 @@ export function ChatPage() {
 
   const handleWSMessage = useCallback((msg: WSServerMessage) => {
     if (msg.type === 'chat_message' && msg.room_id === activeRoom?.id) {
-      const message: Message = {
+      setLiveMessages((prev) => [...prev, {
         id: msg.message_id ?? `live-${msg.user_id}-${msg.timestamp}-${Math.random()}`,
-        room_id: msg.room_id!,
-        user_id: msg.user_id!,
-        username: msg.username!,
-        display_name: msg.display_name,
-        avatar_url: msg.avatar_url,
-        content: msg.content!,
-        created_at: msg.timestamp!,
-      }
-      setLiveMessages((prev) => [...prev, message])
+        room_id: msg.room_id!, user_id: msg.user_id!, username: msg.username!,
+        display_name: msg.display_name, avatar_url: msg.avatar_url,
+        content: msg.content!, created_at: msg.timestamp!,
+      }])
       return
     }
-
     if (msg.type === 'message_edited' && msg.room_id === activeRoom?.id && msg.message_id) {
-      setLiveMessages((prev) =>
-        prev.map((m) =>
-          m.id === msg.message_id
-            ? { ...m, content: msg.content ?? m.content, edited_at: msg.edited_at ?? m.edited_at }
-            : m,
-        ),
-      )
+      setLiveMessages((prev) => prev.map((m) =>
+        m.id === msg.message_id ? { ...m, content: msg.content ?? m.content, edited_at: msg.edited_at ?? m.edited_at } : m
+      ))
       qc.invalidateQueries({ queryKey: ['messages', msg.room_id] })
       return
     }
-
     if (msg.type === 'message_deleted' && msg.room_id === activeRoom?.id && msg.message_id) {
       setLiveMessages((prev) => prev.filter((m) => m.id !== msg.message_id))
       qc.invalidateQueries({ queryKey: ['messages', msg.room_id] })
       return
     }
-
     if (msg.type === 'room_renamed' && msg.room_id && msg.name) {
-      if (activeRoom?.id === msg.room_id) {
-        setActiveRoom((r) => r ? { ...r, name: msg.name! } : r)
-      }
+      if (activeRoom?.id === msg.room_id) setActiveRoom((r) => r ? { ...r, name: msg.name! } : r)
       qc.invalidateQueries({ queryKey: ['rooms'] })
       return
     }
-
-    if (msg.type.startsWith('voice_') || msg.type === 'ice_candidate') {
-      handleVoiceMessage(msg)
-      return
-    }
-
+    if (msg.type.startsWith('voice_') || msg.type === 'ice_candidate') { handleVoiceMessage(msg); return }
     if (msg.type === 'typing' && msg.room_id === activeRoom?.id && msg.user_id !== user?.id) {
       const uid = msg.user_id!
       const uname = msg.display_name || msg.username!
       const timers = typingTimers.current
       if (timers.has(uid)) clearTimeout(timers.get(uid))
-      timers.set(uid, setTimeout(() => {
-        timers.delete(uid)
-        setTypingUsernames((names) => names.filter((n) => n !== uname))
-      }, 3000))
+      timers.set(uid, setTimeout(() => { timers.delete(uid); setTypingUsernames((n) => n.filter((x) => x !== uname)) }, 3000))
       setTypingUsernames((prev) => prev.includes(uname) ? prev : [...prev, uname])
     }
   }, [activeRoom, user?.id, qc])
 
-  const { connected, send } = useWebSocket(wsUrl, {
-    onMessage: handleWSMessage,
-    enabled: !!accessToken,
-  })
-
-  const {
-    inVoice, participants, muted,
-    devices, micDeviceId, speakerDeviceId,
-    joinVoice, leaveVoice, toggleMute,
-    changeMic, setSpeakerDevice,
-    handleVoiceMessage,
-  } = useWebRTC({
-    roomId: activeRoom?.id ?? null,
-    myUserId: user?.id ?? '',
-    sendWS: send as (msg: object) => void,
+  const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
+  const { inVoice, participants, muted, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
+    roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void,
   })
 
   useEffect(() => {
@@ -129,9 +95,7 @@ export function ChatPage() {
   }, [activeRoom, connected, send])
 
   useEffect(() => {
-    if (activeRoom?.type === 'voice' && connected && !inVoice) {
-      joinVoice()
-    }
+    if (activeRoom?.type === 'voice' && connected && !inVoice) joinVoice()
   }, [activeRoom, connected])
 
   const handleSelectRoom = (room: Room) => {
@@ -142,117 +106,140 @@ export function ChatPage() {
     setSidebarOpen(false)
   }
 
-  const handleRoomDeleted = (roomId: string) => {
-    if (activeRoom?.id === roomId) setActiveRoom(null)
-  }
-
-  const handleSend = (content: string) => {
-    if (!activeRoom) return
-    send({ type: 'chat_message', room_id: activeRoom.id, content })
-  }
-
-  const handleTyping = (isTyping: boolean) => {
-    if (!activeRoom) return
-    send({ type: 'typing', room_id: activeRoom.id, is_typing: isTyping })
-  }
-
-  const handleEditMessage = (messageId: string, content: string) => {
-    if (!activeRoom) return
-    editMessage.mutate({ messageId, content, roomId: activeRoom.id })
-  }
-
-  const handleDeleteMessage = (messageId: string) => {
-    if (!activeRoom) return
-    deleteMessage.mutate({ messageId, roomId: activeRoom.id })
-  }
-
   return (
-    <div className="flex h-svh bg-[#313338] text-[#dcddde]">
+    <div className="flex h-svh overflow-hidden" style={{ background: 'var(--bg)' }}>
+      {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-20 bg-black/60 md:hidden animate-fade-in" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <div className={['fixed inset-y-0 left-0 z-30 transition-transform duration-200 md:relative md:z-auto md:translate-x-0 md:flex', sidebarOpen ? 'translate-x-0' : '-translate-x-full'].join(' ')}>
+      {/* Sidebar */}
+      <div className={[
+        'fixed inset-y-0 left-0 z-30 transition-transform duration-200',
+        'md:relative md:z-auto md:flex md:translate-x-0',
+        sidebarOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full',
+      ].join(' ')}>
         <RoomList
           activeRoomId={activeRoom?.id ?? null}
           onSelect={handleSelectRoom}
-          onRoomDeleted={handleRoomDeleted}
-          devices={devices}
-          micDeviceId={micDeviceId}
-          speakerDeviceId={speakerDeviceId}
-          onChangeMic={changeMic}
-          onChangeSpeaker={setSpeakerDevice}
+          onRoomDeleted={(id) => { if (activeRoom?.id === id) setActiveRoom(null) }}
+          devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
+          onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
         />
       </div>
 
-      <main className="flex flex-1 flex-col overflow-hidden min-w-0">
+      {/* Main area */}
+      <main className="flex flex-1 flex-col overflow-hidden min-w-0" style={{ background: 'var(--bg)' }}>
         {activeRoom ? (
           <>
-            <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1e1f22] px-4 shadow-sm">
-              <button className="md:hidden shrink-0 text-[#80848e] hover:text-[#dbdee1] mr-1" onClick={() => setSidebarOpen(true)} title="Open sidebar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+            {/* Topbar */}
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+              <button className="md:hidden shrink-0 flex size-8 items-center justify-center rounded-lg transition-colors"
+                style={{ color: 'var(--text2)' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = ''}
+                onClick={() => setSidebarOpen(true)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
               </button>
-              {activeRoom.type === 'dm' ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#80848e] shrink-0"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
-              ) : activeRoom.type === 'voice' ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-[#3ba55d] shrink-0"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-              ) : (
-                <span className="text-[#80848e] text-lg font-light">#</span>
-              )}
-              <h1 className="font-semibold text-[#f2f3f5] truncate">{activeRoom.name}</h1>
-              <div className="ml-auto flex items-center gap-1 shrink-0">
-                <span className={`size-2 rounded-full ${connected ? 'bg-[#3ba55d]' : 'bg-[#80848e]'}`} title={connected ? 'Connected' : 'Disconnected'} />
+
+              <div className="flex items-center gap-2 min-w-0">
+                {activeRoom.type === 'dm' ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--text2)', flexShrink: 0 }}><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+                ) : activeRoom.type === 'voice' ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--success)', flexShrink: 0 }}><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                ) : (
+                  <span className="font-light text-lg shrink-0" style={{ color: 'var(--text3)' }}>#</span>
+                )}
+                <h1 className="font-semibold text-sm truncate" style={{ color: 'var(--text)' }}>{activeRoom.name}</h1>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <div className={`size-2 rounded-full ${connected ? '' : ''}`}
+                    style={{ background: connected ? 'var(--success)' : 'var(--text3)' }} />
+                  <span className="hidden sm:block text-xs" style={{ color: 'var(--text3)' }}>
+                    {connected ? 'Live' : 'Connecting…'}
+                  </span>
+                </div>
+
                 {activeRoom.type !== 'voice' && (
-                  <button onClick={() => inVoice ? leaveVoice() : joinVoice()} title={inVoice ? 'Leave voice' : 'Join voice'} className={`p-2 rounded transition-colors ${inVoice ? 'text-[#3ba55d] hover:text-[#f04747]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+                  <button onClick={() => inVoice ? leaveVoice() : joinVoice()}
+                    className="flex size-8 items-center justify-center rounded-lg transition-colors"
+                    style={{ color: inVoice ? 'var(--success)' : 'var(--text3)', background: inVoice ? '#22c55e15' : undefined }}
+                    onMouseEnter={(e) => !inVoice && (e.currentTarget.style.background = 'var(--surface2)')}
+                    onMouseLeave={(e) => !inVoice && (e.currentTarget.style.background = '')}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
                   </button>
                 )}
-                <button onClick={() => setMembersOpen((v) => !v)} title="Members" className={`p-2 rounded transition-colors hover:bg-[#35373c] ${membersOpen ? 'text-[#dbdee1]' : 'text-[#80848e] hover:text-[#dbdee1]'}`}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+
+                <button onClick={() => setMembersOpen((v) => !v)}
+                  className="flex size-8 items-center justify-center rounded-lg transition-colors"
+                  style={{ color: membersOpen ? 'var(--text)' : 'var(--text3)', background: membersOpen ? 'var(--surface2)' : undefined }}
+                  onMouseEnter={(e) => !membersOpen && (e.currentTarget.style.background = 'var(--surface2)')}
+                  onMouseLeave={(e) => !membersOpen && (e.currentTarget.style.background = '')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 </button>
               </div>
             </div>
 
             {activeRoom.type === 'voice' ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-4 text-[#80848e]">
+              <div className="flex flex-1 flex-col items-center justify-center gap-4">
                 {inVoice ? (
-                  <VoicePanel participants={participants} muted={muted} devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId} onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice} onToggleMute={toggleMute} onLeave={leaveVoice} />
+                  <VoicePanel participants={participants} muted={muted} devices={devices}
+                    micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
+                    onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
+                    onToggleMute={toggleMute} onLeave={leaveVoice} />
                 ) : (
-                  <p className="text-sm animate-pulse">Connecting to voice...</p>
+                  <p className="text-sm animate-pulse" style={{ color: 'var(--text3)' }}>Joining voice…</p>
                 )}
               </div>
             ) : (
               <>
                 <MessageList
-                  roomId={activeRoom.id}
-                  liveMessages={liveMessages}
-                  userId={user?.id ?? ''}
-                  myRole={myRole}
-                  isAdmin={user?.isAdmin ?? false}
-                  onEdit={handleEditMessage}
-                  onDelete={handleDeleteMessage}
+                  roomId={activeRoom.id} liveMessages={liveMessages}
+                  userId={user?.id ?? ''} myRole={myRole} isAdmin={user?.isAdmin ?? false}
+                  onEdit={(id, content) => editMessage.mutate({ messageId: id, content, roomId: activeRoom.id })}
+                  onDelete={(id) => deleteMessage.mutate({ messageId: id, roomId: activeRoom.id })}
                 />
                 <TypingIndicator usernames={typingUsernames} />
-                <MessageInput onSend={handleSend} onTyping={handleTyping} disabled={!connected} channelName={activeRoom.name} />
+                <MessageInput onSend={(c) => send({ type: 'chat_message', room_id: activeRoom.id, content: c })}
+                  onTyping={(t) => send({ type: 'typing', room_id: activeRoom.id, is_typing: t })}
+                  disabled={!connected} channelName={activeRoom.name} />
                 {inVoice && (
-                  <VoicePanel participants={participants} muted={muted} devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId} onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice} onToggleMute={toggleMute} onLeave={leaveVoice} />
+                  <VoicePanel participants={participants} muted={muted} devices={devices}
+                    micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
+                    onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
+                    onToggleMute={toggleMute} onLeave={leaveVoice} />
                 )}
               </>
             )}
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-[#80848e]">
-            <button className="md:hidden mb-2 rounded bg-[#5865f2] px-4 py-2 text-sm font-medium text-white" onClick={() => setSidebarOpen(true)}>Open channels</button>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" className="opacity-40"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-            <p className="text-sm">Select a channel to start chatting</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+            <button className="mb-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white md:hidden"
+              style={{ background: 'var(--primary)' }}
+              onClick={() => setSidebarOpen(true)}>
+              Open channels
+            </button>
+            <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--surface)' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--text3)' }}>
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="font-medium" style={{ color: 'var(--text)' }}>Pick a channel</p>
+              <p className="mt-1 text-sm" style={{ color: 'var(--text3)' }}>Select from the sidebar to start chatting</p>
+            </div>
           </div>
         )}
       </main>
 
+      {/* Members panel */}
       {membersOpen && activeRoom && (
         <>
-          <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setMembersOpen(false)} />
-          <div className="fixed inset-y-0 right-0 z-30 md:static md:z-auto">
+          <div className="fixed inset-0 z-20 bg-black/50 md:hidden animate-fade-in" onClick={() => setMembersOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-30 animate-slide-in-right md:relative md:z-auto md:animate-none">
             <MembersPanel roomId={activeRoom.id} myUserId={user?.id ?? ''} myRole={myRole} onClose={() => setMembersOpen(false)} />
           </div>
         </>
@@ -261,52 +248,33 @@ export function ChatPage() {
   )
 }
 
-function MessageList({
-  roomId,
-  liveMessages,
-  userId,
-  myRole,
-  isAdmin,
-  onEdit,
-  onDelete,
-}: {
-  roomId: string
-  liveMessages: Message[]
-  userId: string
-  myRole: MemberRole
-  isAdmin: boolean
-  onEdit: (id: string, content: string) => void
-  onDelete: (id: string) => void
+function MessageList({ roomId, liveMessages, userId, myRole, isAdmin, onEdit, onDelete }: {
+  roomId: string; liveMessages: Message[]; userId: string; myRole: MemberRole
+  isAdmin: boolean; onEdit: (id: string, content: string) => void; onDelete: (id: string) => void
 }) {
   const { data, isLoading, fetchNextPage, hasNextPage } = useMessages(roomId)
   const parentRef = useRef<HTMLDivElement>(null)
+  const CONT_MS = 5 * 60 * 1000
 
   const allMessages = [
     ...(data?.pages.slice().reverse().flatMap((p) => [...p].reverse()) ?? []),
     ...liveMessages,
   ]
 
-  const CONTINUATION_MS = 5 * 60 * 1000
-
   const virtualizer = useVirtualizer({
     count: allMessages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (index) => {
-      const isCont =
-        index > 0 &&
-        allMessages[index - 1].user_id === allMessages[index].user_id &&
-        new Date(allMessages[index].created_at).getTime() -
-          new Date(allMessages[index - 1].created_at).getTime() <
-          CONTINUATION_MS
+    estimateSize: (i) => {
+      const isCont = i > 0
+        && allMessages[i - 1].user_id === allMessages[i].user_id
+        && new Date(allMessages[i].created_at).getTime() - new Date(allMessages[i - 1].created_at).getTime() < CONT_MS
       return isCont ? 28 : 64
     },
     overscan: 10,
   })
 
   useEffect(() => {
-    if (liveMessages.length > 0) {
-      virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'smooth' })
-    }
+    if (liveMessages.length > 0) virtualizer.scrollToIndex(allMessages.length - 1, { behavior: 'smooth' })
   }, [liveMessages.length])
 
   if (isLoading) return <MessageSkeleton />
@@ -314,31 +282,24 @@ function MessageList({
   return (
     <div ref={parentRef} className="flex-1 overflow-y-auto py-4">
       {hasNextPage && (
-        <button onClick={() => fetchNextPage()} className="mb-2 w-full text-center text-xs text-[#5865f2] hover:text-[#7289da] py-1">
+        <button onClick={() => fetchNextPage()}
+          className="mb-2 w-full py-1 text-center text-xs transition-colors"
+          style={{ color: 'var(--primary)' }}>
           Load older messages
         </button>
       )}
       <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((item) => {
           const msg = allMessages[item.index]
-          const isContinuation =
-            item.index > 0 &&
-            allMessages[item.index - 1].user_id === msg.user_id &&
-            new Date(msg.created_at).getTime() -
-              new Date(allMessages[item.index - 1].created_at).getTime() <
-              CONTINUATION_MS
-
+          const isCont = item.index > 0
+            && allMessages[item.index - 1].user_id === msg.user_id
+            && new Date(msg.created_at).getTime() - new Date(allMessages[item.index - 1].created_at).getTime() < CONT_MS
           return (
             <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
-              <ChatBubble
-                message={msg}
-                isOwn={msg.user_id === userId}
-                isContinuation={isContinuation}
-                myRole={myRole}
-                isAdmin={isAdmin}
+              <ChatBubble message={msg} isOwn={msg.user_id === userId} isContinuation={isCont}
+                myRole={myRole} isAdmin={isAdmin}
                 onEdit={msg.user_id === userId ? onEdit : undefined}
-                onDelete={onDelete}
-              />
+                onDelete={onDelete} />
             </div>
           )
         })}
