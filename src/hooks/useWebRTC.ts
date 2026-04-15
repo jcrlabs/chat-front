@@ -89,10 +89,21 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     if (!roomId) return
     setMicError(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
-        video: false,
-      })
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
+          video: false,
+        })
+      } catch (constraintErr) {
+        const n = (constraintErr as DOMException)?.name
+        // iOS may reject advanced constraints — retry with bare audio
+        if (n === 'OverconstrainedError' || n === 'NotReadableError' || n === 'AbortError') {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        } else {
+          throw constraintErr
+        }
+      }
       localStream.current = stream
       // Join voice first so the user isn't blocked by device enumeration
       setInVoice(true)

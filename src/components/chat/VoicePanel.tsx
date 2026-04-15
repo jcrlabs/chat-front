@@ -17,7 +17,11 @@ function RemoteAudio({ stream, sinkId }: { stream: MediaStream; sinkId: string }
   const ref = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream
+    const el = ref.current
+    if (!el) return
+    el.srcObject = stream
+    // iOS requires explicit play() even with autoPlay attribute
+    el.play().catch(() => {})
   }, [stream])
 
   useEffect(() => {
