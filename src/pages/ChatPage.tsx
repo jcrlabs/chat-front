@@ -250,6 +250,8 @@ export function ChatPage() {
                         ? 'Conecta un micrófono o auriculares e inténtalo de nuevo.'
                         : micError === 'denied'
                           ? 'El navegador solicitará acceso a tu micrófono. Pulsa el botón de abajo y acepta cuando aparezca el diálogo.'
+                          : micError === 'notfound' ? 'Conecta un micrófono o auriculares e inténtalo de nuevo.'
+                          : micError?.startsWith('unknown:') ? micError.replace('unknown: ', '')
                           : 'El micrófono está bloqueado. Ve a los ajustes del navegador, busca los permisos de este sitio y activa el micrófono. Luego pulsa Reintentar.'}
                     </p>
                     {micError !== 'notfound' && (

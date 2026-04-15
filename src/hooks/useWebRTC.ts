@@ -90,21 +90,24 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     setMicError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : true,
+        audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
         video: false,
       })
       localStream.current = stream
-
-      const all = await navigator.mediaDevices.enumerateDevices()
-      setDevices({
-        mics: all.filter((d) => d.kind === 'audioinput'),
-        speakers: all.filter((d) => d.kind === 'audiooutput'),
-      })
-
+      // Join voice first so the user isn't blocked by device enumeration
       setInVoice(true)
       sendWS({ type: 'voice_join', room_id: roomId })
+      // Non-fatal: enumerate devices for mic/speaker selector (may be limited on iOS)
+      try {
+        const all = await navigator.mediaDevices.enumerateDevices()
+        setDevices({
+          mics: all.filter((d) => d.kind === 'audioinput'),
+          speakers: all.filter((d) => d.kind === 'audiooutput'),
+        })
+      } catch { /* device enumeration optional */ }
     } catch (err) {
       const name = (err as DOMException)?.name
+      const message = (err as DOMException)?.message ?? String(err)
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
         try {
           const perm = await navigator.permissions.query({ name: 'microphone' as PermissionName })
@@ -115,7 +118,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
       } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
         setMicError('notfound')
       } else {
-        setMicError('unknown')
+        setMicError(`unknown: ${name ?? ''} ${message}`.trim())
       }
     }
   }, [roomId, sendWS, micDeviceId])
