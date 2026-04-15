@@ -20,4 +20,7 @@ export const roomsApi = {
     api.delete(`/rooms/${roomId}/members/${userId}`),
   rename: (id: string, name: string) =>
     api.patch<Room>(`/rooms/${id}`, { name }).then((r) => r.data),
+  unread: () =>
+    api.get<{ room_id: string; count: number }[]>('/rooms/unread').then((r) => r.data),
+  markRead: (id: string) => api.post(`/rooms/${id}/read`),
 }

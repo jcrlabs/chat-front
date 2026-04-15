@@ -5,7 +5,8 @@ import { useAuthStore } from '@/store/auth.store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useMessages, useEditMessage, useDeleteMessage } from '@/hooks/queries/use-messages'
 import { useProfile } from '@/hooks/queries/use-profile'
-import { useRoomMembers, useRooms } from '@/hooks/queries/use-rooms'
+import { useRoomMembers, useRooms, useUnreadCounts } from '@/hooks/queries/use-rooms'
+import { roomsApi } from '@/api/rooms'
 import { useDMs } from '@/hooks/queries/use-friends'
 import { RoomList } from '@/components/chat/RoomList'
 import { ChatBubble } from '@/components/chat/ChatBubble'
@@ -28,9 +29,11 @@ export function ChatPage() {
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+  const initialUnreadApplied = useRef(false)
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const { data: allRooms } = useRooms()
   const { data: allDMs } = useDMs()
+  const { data: initialUnread } = useUnreadCounts()
   const { data: roomMembers } = useRoomMembers(activeRoom?.id ?? null)
   const myRole: MemberRole = roomMembers?.find((m) => m.user_id === user?.id)?.role ?? 'member'
   const editMessage = useEditMessage()
@@ -111,6 +114,19 @@ export function ChatPage() {
     send({ type: 'join_room', room_id: activeRoom.id })
   }, [activeRoom, connected, send])
 
+  // Seed unread counts from API once on load
+  useEffect(() => {
+    if (!initialUnread || initialUnreadApplied.current) return
+    initialUnreadApplied.current = true
+    setUnreadCounts((prev) => {
+      const next = { ...prev }
+      initialUnread.forEach(({ room_id, count }) => {
+        next[room_id] = (next[room_id] ?? 0) + count
+      })
+      return next
+    })
+  }, [initialUnread])
+
   // Subscribe to ALL user rooms so WS delivers messages for unread badge tracking
   useEffect(() => {
     if (!connected) return
@@ -136,6 +152,7 @@ export function ChatPage() {
     setTypingUsernames([])
     setSidebarOpen(false)
     setUnreadCounts((prev) => { const next = { ...prev }; delete next[room.id]; return next })
+    roomsApi.markRead(room.id).catch(() => {})
   }
 
   return (

@@ -88,3 +88,11 @@ export function useRenameRoom() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
   })
 }
+
+export function useUnreadCounts() {
+  return useQuery({
+    queryKey: ['rooms', 'unread'],
+    queryFn: roomsApi.unread,
+    staleTime: Infinity, // only used for initial seed — WS tracks live changes
+  })
+}

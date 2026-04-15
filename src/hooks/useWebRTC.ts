@@ -32,6 +32,16 @@ const ICE_SERVERS: RTCIceServer[] = [
     : []),
 ]
 
+// Wraps getUserMedia in a race with a timeout — prevents iOS hanging promises.
+async function getUserMediaWithTimeout(constraints: MediaStreamConstraints, ms: number): Promise<MediaStream> {
+  return Promise.race([
+    navigator.mediaDevices.getUserMedia(constraints),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new DOMException('getUserMedia timeout', 'TimeoutError')), ms)
+    ),
+  ])
+}
+
 export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOptions) {
   const [inVoice, setInVoice] = useState(false)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
@@ -42,6 +52,12 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const [speakerDeviceId, setSpeakerDeviceId] = useState('')
   const localStream = useRef<MediaStream | null>(null)
   const peers = useRef<Map<string, RTCPeerConnection>>(new Map())
+  // Tracks user intent — survives brief WS disconnects during iOS permission dialog
+  const wantVoiceRef = useRef(false)
+  const roomIdRef = useRef(roomId)
+  roomIdRef.current = roomId
+  const sendWSRef = useRef(sendWS)
+  sendWSRef.current = sendWS
 
   const createPeer = useCallback((targetUserId: string, polite: boolean): RTCPeerConnection => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
@@ -88,18 +104,22 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const joinVoice = useCallback(async () => {
     if (!roomId) return
     setMicError(null)
+    wantVoiceRef.current = true
     try {
       let stream: MediaStream
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
-          video: false,
-        })
+        stream = await getUserMediaWithTimeout(
+          {
+            audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
+            video: false,
+          },
+          15000,
+        )
       } catch (constraintErr) {
         const n = (constraintErr as DOMException)?.name
-        // iOS may reject advanced constraints — retry with bare audio
-        if (n === 'OverconstrainedError' || n === 'NotReadableError' || n === 'AbortError') {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        // iOS may reject advanced constraints or hang — retry with bare audio
+        if (n === 'OverconstrainedError' || n === 'NotReadableError' || n === 'AbortError' || n === 'TimeoutError') {
+          stream = await getUserMediaWithTimeout({ audio: true, video: false }, 10000)
         } else {
           throw constraintErr
         }
@@ -136,6 +156,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
   const leaveVoice = useCallback(() => {
     if (!roomId) return
+    wantVoiceRef.current = false
     localStream.current?.getTracks().forEach((t) => t.stop())
     localStream.current = null
     peers.current.forEach((pc) => pc.close())
@@ -225,17 +246,29 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     }
   }, [roomId, myUserId, createPeer, sendWS])
 
-  // When WS disconnects, the server removes us from all voice rooms.
-  // Reset local voice state so joinVoice() fires again on reconnect.
+  // Handle WS disconnect/reconnect. On iOS the WS can briefly drop during the
+  // microphone permission dialog, so we preserve the user's intent (wantVoiceRef)
+  // and re-register voice_join when the connection comes back.
   const prevConnectedRef = useRef(false)
   useEffect(() => {
     if (!connected && prevConnectedRef.current) {
-      localStream.current?.getTracks().forEach((t) => t.stop())
-      localStream.current = null
+      // WS lost — close peers (server clears its state). If user wants voice,
+      // keep the local stream alive so we don't need another permission prompt.
       peers.current.forEach((pc) => pc.close())
       peers.current.clear()
       setParticipants([])
-      setInVoice(false)
+      if (!wantVoiceRef.current) {
+        localStream.current?.getTracks().forEach((t) => t.stop())
+        localStream.current = null
+        setInVoice(false)
+      }
+    }
+    if (connected && !prevConnectedRef.current) {
+      // WS reconnected — if the user was in (or joining) voice, re-register.
+      if (wantVoiceRef.current && roomIdRef.current && localStream.current) {
+        setInVoice(true)
+        sendWSRef.current({ type: 'voice_join', room_id: roomIdRef.current })
+      }
     }
     prevConnectedRef.current = connected
   }, [connected])
