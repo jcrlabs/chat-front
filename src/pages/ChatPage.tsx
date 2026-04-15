@@ -5,7 +5,8 @@ import { useAuthStore } from '@/store/auth.store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useMessages, useEditMessage, useDeleteMessage } from '@/hooks/queries/use-messages'
 import { useProfile } from '@/hooks/queries/use-profile'
-import { useRoomMembers } from '@/hooks/queries/use-rooms'
+import { useRoomMembers, useRooms } from '@/hooks/queries/use-rooms'
+import { useDMs } from '@/hooks/queries/use-friends'
 import { RoomList } from '@/components/chat/RoomList'
 import { ChatBubble } from '@/components/chat/ChatBubble'
 import { MessageInput } from '@/components/chat/MessageInput'
@@ -28,6 +29,8 @@ export function ChatPage() {
   const [typingUsernames, setTypingUsernames] = useState<string[]>([])
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const { data: allRooms } = useRooms()
+  const { data: allDMs } = useDMs()
   const { data: roomMembers } = useRoomMembers(activeRoom?.id ?? null)
   const myRole: MemberRole = roomMembers?.find((m) => m.user_id === user?.id)?.role ?? 'member'
   const editMessage = useEditMessage()
@@ -49,12 +52,21 @@ export function ChatPage() {
   const handleWSMessage = useCallback((msg: WSServerMessage) => {
     if (msg.type === 'chat_message') {
       if (msg.room_id === activeRoom?.id) {
-        setLiveMessages((prev) => [...prev, {
+        const newMsg: Message = {
           id: msg.message_id ?? `live-${msg.user_id}-${msg.timestamp}-${Math.random()}`,
           room_id: msg.room_id!, user_id: msg.user_id!, username: msg.username!,
           display_name: msg.display_name, avatar_url: msg.avatar_url,
           content: msg.content!, created_at: msg.timestamp!,
-        }])
+        }
+        setLiveMessages((prev) => {
+          if (msg.user_id === user?.id) {
+            const tempIdx = prev.findIndex((m) => m.id.startsWith('temp-') && m.content === msg.content)
+            if (tempIdx !== -1) {
+              const next = [...prev]; next[tempIdx] = newMsg; return next
+            }
+          }
+          return [...prev, newMsg]
+        })
       } else if (msg.room_id) {
         setUnreadCounts((prev) => ({ ...prev, [msg.room_id!]: (prev[msg.room_id!] ?? 0) + 1 }))
       }
@@ -99,9 +111,23 @@ export function ChatPage() {
     send({ type: 'join_room', room_id: activeRoom.id })
   }, [activeRoom, connected, send])
 
+  // Subscribe to ALL user rooms so WS delivers messages for unread badge tracking
   useEffect(() => {
-    if (activeRoom?.type === 'voice' && connected && !inVoice) joinVoice()
-  }, [activeRoom, connected])
+    if (!connected) return
+    allRooms?.forEach((r) => send({ type: 'join_room', room_id: r.id }))
+    allDMs?.forEach((dm) => send({ type: 'join_room', room_id: dm.id }))
+  }, [connected, allRooms, allDMs, send])
+
+  const handleSend = useCallback((content: string) => {
+    if (!activeRoom || !user) return
+    setLiveMessages((prev) => [...prev, {
+      id: `temp-${Date.now()}-${Math.random()}`,
+      room_id: activeRoom.id, user_id: user.id, username: user.username,
+      display_name: user.displayName, avatar_url: user.avatarUrl,
+      content, created_at: new Date().toISOString(),
+    }])
+    send({ type: 'chat_message', room_id: activeRoom.id, content })
+  }, [activeRoom, user, send])
 
   const handleSelectRoom = (room: Room) => {
     if (activeRoom?.type === 'voice' && inVoice) leaveVoice()
@@ -242,7 +268,20 @@ export function ChatPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm animate-pulse" style={{ color: 'var(--text3)' }}>Joining voice…</p>
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--surface)' }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--success)' }}>
+                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                      </svg>
+                    </div>
+                    <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>Canal de voz</p>
+                    <p className="text-xs" style={{ color: 'var(--text3)' }}>Pulsa para unirte — se pedirá acceso al micrófono</p>
+                    <button onClick={joinVoice}
+                      className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-all"
+                      style={{ background: 'var(--success)' }}>
+                      Unirse al canal
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
@@ -255,7 +294,7 @@ export function ChatPage() {
                   onDelete={(id) => deleteMessage.mutate({ messageId: id, roomId: activeRoom.id })}
                 />
                 <TypingIndicator usernames={typingUsernames} />
-                <MessageInput onSend={(c) => send({ type: 'chat_message', room_id: activeRoom.id, content: c })}
+                <MessageInput onSend={handleSend}
                   onTyping={(t) => send({ type: 'typing', room_id: activeRoom.id, is_typing: t })}
                   disabled={!connected} channelName={activeRoom.name} />
                 {inVoice && (
