@@ -70,7 +70,7 @@ export function ChatPage() {
           }
           return [...prev, newMsg]
         })
-      } else if (msg.room_id) {
+      } else if (msg.room_id && msg.user_id !== user?.id) {
         setUnreadCounts((prev) => ({ ...prev, [msg.room_id!]: (prev[msg.room_id!] ?? 0) + 1 }))
       }
       return
@@ -104,7 +104,7 @@ export function ChatPage() {
   }, [activeRoom, user?.id, qc])
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
-  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
+  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage, voiceDebugLog } = useWebRTC({
     roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
 
@@ -239,7 +239,7 @@ export function ChatPage() {
                   <VoicePanel participants={participants} muted={muted} devices={devices}
                     micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
                     onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
-                    onToggleMute={toggleMute} onLeave={leaveVoice} />
+                    onToggleMute={toggleMute} onLeave={leaveVoice} debugLog={voiceDebugLog} />
                 ) : micError ? (
                   <div className="flex flex-col items-center gap-3 rounded-2xl p-6 max-w-sm text-center"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -320,7 +320,7 @@ export function ChatPage() {
                   <VoicePanel participants={participants} muted={muted} devices={devices}
                     micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
                     onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
-                    onToggleMute={toggleMute} onLeave={leaveVoice} />
+                    onToggleMute={toggleMute} onLeave={leaveVoice} debugLog={voiceDebugLog} />
                 )}
               </>
             )}
