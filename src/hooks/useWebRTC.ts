@@ -32,22 +32,11 @@ const ICE_SERVERS: RTCIceServer[] = [
     : []),
 ]
 
-// Wraps getUserMedia in a race with a timeout — prevents iOS hanging promises.
-async function getUserMediaWithTimeout(constraints: MediaStreamConstraints, ms: number): Promise<MediaStream> {
-  return Promise.race([
-    navigator.mediaDevices.getUserMedia(constraints),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new DOMException('getUserMedia timeout', 'TimeoutError')), ms)
-    ),
-  ])
-}
-
 export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOptions) {
   const [inVoice, setInVoice] = useState(false)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [muted, setMuted] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
-  const [joining, setJoining] = useState(false)
   const [devices, setDevices] = useState<AudioDevices>({ mics: [], speakers: [] })
   const [micDeviceId, setMicDeviceId] = useState('')
   const [speakerDeviceId, setSpeakerDeviceId] = useState('')
@@ -123,69 +112,67 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const joinVoice = useCallback(async () => {
     const rid = roomIdRef.current
     if (!rid) return
-    setMicError(null)
-    wantVoiceRef.current = true
-    setJoining(true)
-    vlog(`joinVoice start room=${rid.slice(0,8)} ws=${connected ? 'ON' : 'OFF'}`)
+
+    // CRITICAL: call getUserMedia FIRST, before ANY state updates.
+    // iOS Safari revokes "transient activation" (user gesture) after setState calls,
+    // causing getUserMedia to fail with NotAllowedError without showing a permission dialog.
+    let stream: MediaStream
     try {
-      let stream: MediaStream
-      try {
-        vlog('getUserMedia requesting...')
-        stream = await getUserMediaWithTimeout(
-          {
-            audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : { echoCancellation: true, noiseSuppression: true },
-            video: false,
-          },
-          15000,
-        )
-        vlog(`getUserMedia OK tracks=${stream.getTracks().length} active=${stream.active}`)
-      } catch (constraintErr) {
-        const n = (constraintErr as DOMException)?.name
-        vlog(`getUserMedia fail: ${n} — retrying bare audio`)
-        // iOS may reject advanced constraints or hang — retry with bare audio
-        if (n === 'OverconstrainedError' || n === 'NotReadableError' || n === 'AbortError' || n === 'TimeoutError') {
-          stream = await getUserMediaWithTimeout({ audio: true, video: false }, 10000)
-          vlog(`getUserMedia bare OK tracks=${stream.getTracks().length}`)
-        } else {
-          throw constraintErr
-        }
-      }
-      localStream.current = stream
-      const trackState = stream.getAudioTracks().map(t => `${t.label}:enabled=${t.enabled},muted=${t.muted},state=${t.readyState}`)
-      vlog(`stream details: ${trackState.join(', ')}`)
-      // Join voice first so the user isn't blocked by device enumeration
-      setInVoice(true)
-      setJoining(false)
-      vlog(`sending voice_join room=${rid.slice(0,8)}`)
-      sendWSRef.current({ type: 'voice_join', room_id: rid })
-      // Non-fatal: enumerate devices for mic/speaker selector (may be limited on iOS)
-      try {
-        const all = await navigator.mediaDevices.enumerateDevices()
-        vlog(`devices: ${all.filter(d => d.kind === 'audioinput').length} mics, ${all.filter(d => d.kind === 'audiooutput').length} speakers`)
-        setDevices({
-          mics: all.filter((d) => d.kind === 'audioinput'),
-          speakers: all.filter((d) => d.kind === 'audiooutput'),
-        })
-      } catch { vlog('enumerateDevices failed (non-fatal)') }
-    } catch (err) {
-      setJoining(false)
-      const name = (err as DOMException)?.name
-      const message = (err as DOMException)?.message ?? String(err)
-      vlog(`joinVoice ERROR: ${name} ${message}`)
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: micDeviceId
+          ? { deviceId: { exact: micDeviceId } }
+          : { echoCancellation: true, noiseSuppression: true },
+        video: false,
+      })
+    } catch (firstErr) {
+      const n = (firstErr as DOMException)?.name
+      if (n === 'OverconstrainedError' || n === 'NotReadableError' || n === 'AbortError') {
         try {
-          const perm = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-          vlog(`permission state: ${perm.state}`)
-          setMicError(perm.state === 'denied' ? 'denied-permanent' : 'denied')
-        } catch {
-          setMicError('denied')
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        } catch (bareErr) {
+          // Both attempts failed — fall through to error handling below
+          stream = null as unknown as MediaStream
+          const name = (bareErr as DOMException)?.name
+          const message = (bareErr as DOMException)?.message ?? String(bareErr)
+          vlog(`joinVoice ERROR (bare retry): ${name} ${message}`)
+          setMicError(name === 'NotAllowedError' || name === 'PermissionDeniedError' ? 'denied' : `unknown: ${name ?? ''} ${message}`.trim())
+          return
         }
-      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        setMicError('notfound')
       } else {
-        setMicError(`unknown: ${name ?? ''} ${message}`.trim())
+        // NotAllowedError, NotFoundError, etc. — no retry
+        const name = (firstErr as DOMException)?.name
+        const message = (firstErr as DOMException)?.message ?? String(firstErr)
+        vlog(`joinVoice ERROR: ${name} ${message}`)
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setMicError('denied')
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          setMicError('notfound')
+        } else {
+          setMicError(`unknown: ${name ?? ''} ${message}`.trim())
+        }
+        return
       }
     }
+
+    // getUserMedia succeeded — now safe to update state
+    setMicError(null)
+    wantVoiceRef.current = true
+    localStream.current = stream
+    const trackState = stream.getAudioTracks().map(t => `${t.label}:enabled=${t.enabled},muted=${t.muted},state=${t.readyState}`)
+    vlog(`getUserMedia OK tracks=${stream.getTracks().length} active=${stream.active}`)
+    vlog(`stream details: ${trackState.join(', ')}`)
+    setInVoice(true)
+    vlog(`sending voice_join room=${rid.slice(0,8)} ws=${connected ? 'ON' : 'OFF'}`)
+    sendWSRef.current({ type: 'voice_join', room_id: rid })
+    // Non-fatal: enumerate devices for mic/speaker selector
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices()
+      vlog(`devices: ${all.filter(d => d.kind === 'audioinput').length} mics, ${all.filter(d => d.kind === 'audiooutput').length} speakers`)
+      setDevices({
+        mics: all.filter((d) => d.kind === 'audioinput'),
+        speakers: all.filter((d) => d.kind === 'audiooutput'),
+      })
+    } catch { vlog('enumerateDevices failed (non-fatal)') }
   }, [micDeviceId, connected, vlog])
 
   const leaveVoice = useCallback(() => {
@@ -326,7 +313,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   }, [roomId]) // intentional: only cleanup when room changes
 
   return {
-    inVoice, joining, participants, muted, micError,
+    inVoice, participants, muted, micError,
     devices, micDeviceId, speakerDeviceId,
     joinVoice, leaveVoice, toggleMute,
     changeMic, setSpeakerDevice: setSpeakerDeviceId,

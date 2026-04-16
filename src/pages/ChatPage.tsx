@@ -104,7 +104,7 @@ export function ChatPage() {
   }, [activeRoom, user?.id, qc])
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
-  const { inVoice, joining, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage, voiceDebugLog } = useWebRTC({
+  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage, voiceDebugLog } = useWebRTC({
     roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
 
@@ -248,12 +248,6 @@ export function ChatPage() {
                     micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
                     onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
                     onToggleMute={toggleMute} onLeave={leaveVoice} debugLog={voiceDebugLog} />
-                ) : joining ? (
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="size-8 animate-spin rounded-full border-2 border-[#5865f2] border-t-transparent" />
-                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Conectando micrófono...</p>
-                    <p className="text-xs" style={{ color: 'var(--text3)' }}>Acepta el permiso si aparece el diálogo</p>
-                  </div>
                 ) : micError ? (
                   <div className="flex flex-col items-center gap-3 rounded-2xl p-6 max-w-sm text-center"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
