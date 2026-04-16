@@ -47,6 +47,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [muted, setMuted] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
+  const [joining, setJoining] = useState(false)
   const [devices, setDevices] = useState<AudioDevices>({ mics: [], speakers: [] })
   const [micDeviceId, setMicDeviceId] = useState('')
   const [speakerDeviceId, setSpeakerDeviceId] = useState('')
@@ -124,6 +125,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     if (!rid) return
     setMicError(null)
     wantVoiceRef.current = true
+    setJoining(true)
     vlog(`joinVoice start room=${rid.slice(0,8)} ws=${connected ? 'ON' : 'OFF'}`)
     try {
       let stream: MediaStream
@@ -153,6 +155,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
       vlog(`stream details: ${trackState.join(', ')}`)
       // Join voice first so the user isn't blocked by device enumeration
       setInVoice(true)
+      setJoining(false)
       vlog(`sending voice_join room=${rid.slice(0,8)}`)
       sendWSRef.current({ type: 'voice_join', room_id: rid })
       // Non-fatal: enumerate devices for mic/speaker selector (may be limited on iOS)
@@ -165,6 +168,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
         })
       } catch { vlog('enumerateDevices failed (non-fatal)') }
     } catch (err) {
+      setJoining(false)
       const name = (err as DOMException)?.name
       const message = (err as DOMException)?.message ?? String(err)
       vlog(`joinVoice ERROR: ${name} ${message}`)
@@ -322,7 +326,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   }, [roomId]) // intentional: only cleanup when room changes
 
   return {
-    inVoice, participants, muted, micError,
+    inVoice, joining, participants, muted, micError,
     devices, micDeviceId, speakerDeviceId,
     joinVoice, leaveVoice, toggleMute,
     changeMic, setSpeakerDevice: setSpeakerDeviceId,
