@@ -104,7 +104,7 @@ export function ChatPage() {
   }, [activeRoom, user?.id, qc])
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
-  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage, voiceDebugLog } = useWebRTC({
+  const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
     roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
 
@@ -175,6 +175,8 @@ export function ChatPage() {
           devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
           onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
           unreadCounts={unreadCounts}
+          inVoice={inVoice} muted={muted} onToggleMute={toggleMute} onLeaveVoice={leaveVoice}
+          voiceRoomName={activeRoom?.type === 'voice' ? activeRoom.name : undefined}
         />
       </div>
 
@@ -235,19 +237,8 @@ export function ChatPage() {
 
             {activeRoom.type === 'voice' ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-4">
-                {/* Debug log — always visible in voice rooms when there are entries */}
-                {voiceDebugLog.length > 0 && !inVoice && (
-                  <div className="w-full max-w-md max-h-40 overflow-y-auto rounded bg-[#0d0d0d] p-2 font-mono text-[10px] leading-relaxed text-[#8b949e]">
-                    {voiceDebugLog.map((line, i) => (
-                      <div key={i} className={line.includes('FAIL') || line.includes('ERROR') || line.includes('LOST') ? 'text-[#f04747]' : line.includes('OK') || line.includes('sent') ? 'text-[#3ba55d]' : ''}>{line}</div>
-                    ))}
-                  </div>
-                )}
                 {inVoice ? (
-                  <VoicePanel participants={participants} muted={muted} devices={devices}
-                    micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
-                    onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
-                    onToggleMute={toggleMute} onLeave={leaveVoice} debugLog={voiceDebugLog} />
+                  <VoicePanel participants={participants} speakerDeviceId={speakerDeviceId} />
                 ) : micError ? (
                   <div className="flex flex-col items-center gap-3 rounded-2xl p-6 max-w-sm text-center"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -325,10 +316,7 @@ export function ChatPage() {
                   onTyping={(t) => send({ type: 'typing', room_id: activeRoom.id, is_typing: t })}
                   disabled={!connected} channelName={activeRoom.name} />
                 {inVoice && (
-                  <VoicePanel participants={participants} muted={muted} devices={devices}
-                    micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
-                    onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
-                    onToggleMute={toggleMute} onLeave={leaveVoice} debugLog={voiceDebugLog} />
+                  <VoicePanel participants={participants} speakerDeviceId={speakerDeviceId} />
                 )}
               </>
             )}

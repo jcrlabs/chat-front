@@ -21,6 +21,11 @@ interface Props {
   onChangeMic?: (id: string) => void
   onChangeSpeaker?: (id: string) => void
   unreadCounts?: Record<string, number>
+  inVoice?: boolean
+  muted?: boolean
+  onToggleMute?: () => void
+  onLeaveVoice?: () => void
+  voiceRoomName?: string
 }
 
 const S = {
@@ -42,7 +47,7 @@ function Avatar({ name, url, size = 7 }: { name: string; url?: string | null; si
   return <div className={cls} style={{ background: color }}>{name[0].toUpperCase()}</div>
 }
 
-export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDeviceId = '', speakerDeviceId = '', onChangeMic, onChangeSpeaker, unreadCounts = {} }: Props) {
+export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDeviceId = '', speakerDeviceId = '', onChangeMic, onChangeSpeaker, unreadCounts = {}, inVoice, muted, onToggleMute, onLeaveVoice, voiceRoomName }: Props) {
   const { data: rooms, isLoading } = useRooms()
   const { data: dms } = useDMs()
   const { data: friends } = useFriends()
@@ -454,6 +459,44 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Voice status bar */}
+        {inVoice && (
+          <div className="shrink-0 border-t px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="size-2 rounded-full bg-[#3ba55d] animate-pulse shrink-0" />
+                <span className="text-xs font-semibold truncate" style={{ color: '#3ba55d' }}>Voice Connected</span>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={onToggleMute} title={muted ? 'Unmute' : 'Mute'}
+                  className="flex size-7 items-center justify-center rounded-md transition-colors"
+                  style={{ color: muted ? 'var(--danger)' : 'var(--text2)', background: muted ? 'var(--danger)15' : undefined }}
+                  onMouseEnter={(e) => !muted && (e.currentTarget.style.background = 'var(--surface3)')}
+                  onMouseLeave={(e) => !muted && (e.currentTarget.style.background = '')}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    {muted
+                      ? <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                      : <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                    }
+                  </svg>
+                </button>
+                <button onClick={onLeaveVoice} title="Disconnect"
+                  className="flex size-7 items-center justify-center rounded-md transition-colors"
+                  style={{ color: 'var(--danger)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--danger)15'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ''}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08C.11 12.9 0 12.65 0 12.38c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {voiceRoomName && (
+              <p className="text-[11px] truncate" style={{ color: 'var(--text3)' }}>{voiceRoomName}</p>
+            )}
           </div>
         )}
 

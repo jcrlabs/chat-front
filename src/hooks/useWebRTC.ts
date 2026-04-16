@@ -40,29 +40,16 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
   const [devices, setDevices] = useState<AudioDevices>({ mics: [], speakers: [] })
   const [micDeviceId, setMicDeviceId] = useState('')
   const [speakerDeviceId, setSpeakerDeviceId] = useState('')
-  const [voiceDebugLog, setVoiceDebugLog] = useState<string[]>([])
   const localStream = useRef<MediaStream | null>(null)
   const peers = useRef<Map<string, RTCPeerConnection>>(new Map())
-  // Tracks user intent — survives brief WS disconnects during iOS permission dialog
   const wantVoiceRef = useRef(false)
   const roomIdRef = useRef(roomId)
   roomIdRef.current = roomId
   const sendWSRef = useRef(sendWS)
   sendWSRef.current = sendWS
 
-  const vlog = useCallback((msg: string) => {
-    const ts = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    const entry = `${ts} ${msg}`
-    console.warn('[Voice]', msg)
-    setVoiceDebugLog((prev) => [...prev.slice(-49), entry])
-  }, [])
-
   const createPeer = useCallback((targetUserId: string, polite: boolean): RTCPeerConnection => {
-    vlog(`createPeer uid=${targetUserId.slice(0,8)} polite=${polite}`)
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-
-    pc.oniceconnectionstatechange = () => vlog(`ICE state ${targetUserId.slice(0,8)}: ${pc.iceConnectionState}`)
-    pc.onconnectionstatechange = () => vlog(`PC state ${targetUserId.slice(0,8)}: ${pc.connectionState}`)
 
     pc.onicecandidate = (e) => {
       if (!e.candidate || !roomIdRef.current) return
@@ -78,23 +65,17 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
     pc.ontrack = (e) => {
       const stream = e.streams[0]
-      vlog(`ontrack ${targetUserId.slice(0,8)} tracks=${stream?.getTracks().length}`)
       setParticipants((prev) =>
         prev.map((p) => p.userId === targetUserId ? { ...p, stream } : p)
       )
     }
 
     if (localStream.current) {
-      const tracks = localStream.current.getTracks()
-      vlog(`addTrack ${targetUserId.slice(0,8)} localTracks=${tracks.length} enabled=${tracks.map(t => t.enabled)}`)
-      tracks.forEach((t) => pc.addTrack(t, localStream.current!))
-    } else {
-      vlog(`addTrack ${targetUserId.slice(0,8)} NO localStream`)
+      localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current!))
     }
 
     if (!polite && roomIdRef.current) {
       pc.createOffer().then((offer) => {
-        vlog(`offer sent → ${targetUserId.slice(0,8)}`)
         pc.setLocalDescription(offer)
         sendWSRef.current({
           type: 'voice_offer',
@@ -103,7 +84,7 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
           sdp: offer.sdp,
           sdp_type: offer.type,
         })
-      }).catch((err) => vlog(`offer FAIL ${targetUserId.slice(0,8)}: ${err.message}`))
+      }).catch(() => {})
     }
 
     return pc
@@ -114,8 +95,8 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     if (!rid) return
 
     // CRITICAL: call getUserMedia FIRST, before ANY state updates.
-    // iOS Safari revokes "transient activation" (user gesture) after setState calls,
-    // causing getUserMedia to fail with NotAllowedError without showing a permission dialog.
+    // iOS WebKit revokes transient activation after setState calls,
+    // causing getUserMedia to fail with NotAllowedError silently.
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -130,19 +111,14 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
         } catch (bareErr) {
-          // Both attempts failed — fall through to error handling below
-          stream = null as unknown as MediaStream
           const name = (bareErr as DOMException)?.name
           const message = (bareErr as DOMException)?.message ?? String(bareErr)
-          vlog(`joinVoice ERROR (bare retry): ${name} ${message}`)
           setMicError(name === 'NotAllowedError' || name === 'PermissionDeniedError' ? 'denied' : `unknown: ${name ?? ''} ${message}`.trim())
           return
         }
       } else {
-        // NotAllowedError, NotFoundError, etc. — no retry
         const name = (firstErr as DOMException)?.name
         const message = (firstErr as DOMException)?.message ?? String(firstErr)
-        vlog(`joinVoice ERROR: ${name} ${message}`)
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           setMicError('denied')
         } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
@@ -154,26 +130,19 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
       }
     }
 
-    // getUserMedia succeeded — now safe to update state
     setMicError(null)
     wantVoiceRef.current = true
     localStream.current = stream
-    const trackState = stream.getAudioTracks().map(t => `${t.label}:enabled=${t.enabled},muted=${t.muted},state=${t.readyState}`)
-    vlog(`getUserMedia OK tracks=${stream.getTracks().length} active=${stream.active}`)
-    vlog(`stream details: ${trackState.join(', ')}`)
     setInVoice(true)
-    vlog(`sending voice_join room=${rid.slice(0,8)} ws=${connected ? 'ON' : 'OFF'}`)
     sendWSRef.current({ type: 'voice_join', room_id: rid })
-    // Non-fatal: enumerate devices for mic/speaker selector
     try {
       const all = await navigator.mediaDevices.enumerateDevices()
-      vlog(`devices: ${all.filter(d => d.kind === 'audioinput').length} mics, ${all.filter(d => d.kind === 'audiooutput').length} speakers`)
       setDevices({
         mics: all.filter((d) => d.kind === 'audioinput'),
         speakers: all.filter((d) => d.kind === 'audiooutput'),
       })
-    } catch { vlog('enumerateDevices failed (non-fatal)') }
-  }, [micDeviceId, connected, vlog])
+    } catch { /* device enumeration optional */ }
+  }, [micDeviceId])
 
   const leaveVoice = useCallback(() => {
     const rid = roomIdRef.current
@@ -188,7 +157,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     sendWSRef.current({ type: 'voice_leave', room_id: rid })
   }, [])
 
-  // Switch mic while in voice
   const changeMic = useCallback(async (deviceId: string) => {
     setMicDeviceId(deviceId)
     if (!inVoice) return
@@ -198,7 +166,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     })
     localStream.current?.getTracks().forEach((t) => t.stop())
     localStream.current = newStream
-    // Replace tracks in all peer connections
     peers.current.forEach((pc) => {
       const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
       if (sender) sender.replaceTrack(newStream.getAudioTracks()[0])
@@ -219,7 +186,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     if (!rid) return
 
     if (msg.type === 'voice_participants' && msg.participants) {
-      vlog(`voice_participants: ${(msg.participants as string[]).length} peers`)
       const parts: VoiceParticipant[] = (msg.participants as string[]).map((uid) => ({
         userId: uid,
         username: uid.slice(0, 8),
@@ -235,7 +201,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
     if (msg.type === 'voice_joined' && msg.user_id && msg.user_id.toString() !== myUserId) {
       const uid = msg.user_id.toString()
-      vlog(`voice_joined: ${uid.slice(0,8)}`)
       setParticipants((prev) => [...prev, { userId: uid, username: msg.username ?? uid }])
       if (!peers.current.has(uid)) {
         const pc = createPeer(uid, true)
@@ -245,7 +210,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
     if (msg.type === 'voice_left' && msg.user_id) {
       const uid = msg.user_id.toString()
-      vlog(`voice_left: ${uid.slice(0,8)}`)
       peers.current.get(uid)?.close()
       peers.current.delete(uid)
       setParticipants((prev) => prev.filter((p) => p.userId !== uid))
@@ -253,18 +217,15 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
 
     if (msg.type === 'voice_offer' && msg.user_id && msg.sdp) {
       const uid = msg.user_id.toString()
-      vlog(`voice_offer from ${uid.slice(0,8)}`)
       let pc = peers.current.get(uid)
       if (!pc) { pc = createPeer(uid, true); peers.current.set(uid, pc) }
       await pc.setRemoteDescription({ type: msg.sdp_type as RTCSdpType, sdp: msg.sdp })
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
-      vlog(`voice_answer sent → ${uid.slice(0,8)}`)
       sendWSRef.current({ type: 'voice_answer', room_id: rid, target_user_id: uid, sdp: answer.sdp, sdp_type: answer.type })
     }
 
     if (msg.type === 'voice_answer' && msg.user_id && msg.sdp) {
-      vlog(`voice_answer from ${msg.user_id.toString().slice(0,8)}`)
       const pc = peers.current.get(msg.user_id.toString())
       if (pc) await pc.setRemoteDescription({ type: msg.sdp_type as RTCSdpType, sdp: msg.sdp })
     }
@@ -273,15 +234,11 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
       const pc = peers.current.get(msg.user_id.toString())
       if (pc) await pc.addIceCandidate({ candidate: msg.candidate, sdpMid: msg.sdp_mid, sdpMLineIndex: msg.sdp_m_line_index })
     }
-  }, [myUserId, createPeer, vlog])
+  }, [myUserId, createPeer])
 
-  // Handle WS disconnect/reconnect. On iOS the WS can briefly drop during the
-  // microphone permission dialog, so we preserve the user's intent (wantVoiceRef)
-  // and re-register voice_join when the connection comes back.
   const prevConnectedRef = useRef(false)
   useEffect(() => {
     if (!connected && prevConnectedRef.current) {
-      vlog(`WS LOST wantVoice=${wantVoiceRef.current} stream=${!!localStream.current}`)
       peers.current.forEach((pc) => pc.close())
       peers.current.clear()
       setParticipants([])
@@ -289,23 +246,17 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
         localStream.current?.getTracks().forEach((t) => t.stop())
         localStream.current = null
         setInVoice(false)
-      } else {
-        vlog('keeping stream alive for reconnect')
       }
     }
     if (connected && !prevConnectedRef.current) {
-      vlog(`WS RECONNECT wantVoice=${wantVoiceRef.current} room=${roomIdRef.current?.slice(0,8)} stream=${!!localStream.current}`)
       if (wantVoiceRef.current && roomIdRef.current && localStream.current) {
-        const tracks = localStream.current.getAudioTracks()
-        vlog(`re-join voice, tracks=${tracks.length} state=${tracks.map(t => t.readyState)}`)
         setInVoice(true)
         sendWSRef.current({ type: 'voice_join', room_id: roomIdRef.current })
       }
     }
     prevConnectedRef.current = connected
-  }, [connected, vlog])
+  }, [connected])
 
-  // Cleanup on room change
   useEffect(() => {
     return () => {
       if (inVoice) leaveVoice()
@@ -317,6 +268,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     devices, micDeviceId, speakerDeviceId,
     joinVoice, leaveVoice, toggleMute,
     changeMic, setSpeakerDevice: setSpeakerDeviceId,
-    handleVoiceMessage, voiceDebugLog,
+    handleVoiceMessage,
   }
 }
