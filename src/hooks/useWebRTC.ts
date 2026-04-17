@@ -90,8 +90,8 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     return pc
   }, [])
 
-  const joinVoice = useCallback(async () => {
-    const rid = roomIdRef.current
+  const joinVoice = useCallback(async (overrideRoomId?: string) => {
+    const rid = overrideRoomId ?? roomIdRef.current
     if (!rid) return
 
     // CRITICAL: call getUserMedia FIRST, before ANY state updates.
@@ -256,12 +256,6 @@ export function useWebRTC({ roomId, myUserId, sendWS, connected }: UseWebRTCOpti
     }
     prevConnectedRef.current = connected
   }, [connected])
-
-  useEffect(() => {
-    return () => {
-      if (inVoice) leaveVoice()
-    }
-  }, [roomId]) // intentional: only cleanup when room changes
 
   return {
     inVoice, participants, muted, micError,
