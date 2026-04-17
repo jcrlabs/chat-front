@@ -24,6 +24,8 @@ export function ChatPage() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const qc = useQueryClient()
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
+  const [voiceRoomId, setVoiceRoomId] = useState<string | null>(null)
+  const [voiceRoomName, setVoiceRoomName] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
   const [liveMessages, setLiveMessages] = useState<Message[]>([])
@@ -105,8 +107,22 @@ export function ChatPage() {
 
   const { connected, send } = useWebSocket(wsUrl, { onMessage: handleWSMessage, enabled: !!accessToken })
   const { inVoice, participants, muted, micError, devices, micDeviceId, speakerDeviceId, joinVoice, leaveVoice, toggleMute, changeMic, setSpeakerDevice, handleVoiceMessage } = useWebRTC({
-    roomId: activeRoom?.id ?? null, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
+    roomId: voiceRoomId, myUserId: user?.id ?? '', sendWS: send as (msg: object) => void, connected,
   })
+
+  const handleJoinVoice = useCallback(async () => {
+    if (!activeRoom) return
+    if (inVoice) leaveVoice()
+    setVoiceRoomId(activeRoom.id)
+    setVoiceRoomName(activeRoom.name)
+    await joinVoice(activeRoom.id)
+  }, [activeRoom, inVoice, leaveVoice, joinVoice])
+
+  const handleLeaveVoice = useCallback(() => {
+    leaveVoice()
+    setVoiceRoomId(null)
+    setVoiceRoomName(null)
+  }, [leaveVoice])
 
   useEffect(() => {
     if (!activeRoom || !connected) return
@@ -146,7 +162,6 @@ export function ChatPage() {
   }, [activeRoom, user, send])
 
   const handleSelectRoom = (room: Room) => {
-    if (activeRoom?.type === 'voice' && inVoice) leaveVoice()
     if (activeRoom) send({ type: 'leave_room', room_id: activeRoom.id })
     setActiveRoom(room)
     setTypingUsernames([])
@@ -175,8 +190,8 @@ export function ChatPage() {
           devices={devices} micDeviceId={micDeviceId} speakerDeviceId={speakerDeviceId}
           onChangeMic={changeMic} onChangeSpeaker={setSpeakerDevice}
           unreadCounts={unreadCounts}
-          inVoice={inVoice} muted={muted} onToggleMute={toggleMute} onLeaveVoice={leaveVoice}
-          voiceRoomName={activeRoom?.type === 'voice' ? activeRoom.name : undefined}
+          inVoice={inVoice} muted={muted} onToggleMute={toggleMute} onLeaveVoice={handleLeaveVoice}
+          voiceRoomName={voiceRoomName ?? undefined}
         />
       </div>
 
@@ -215,12 +230,10 @@ export function ChatPage() {
                   </span>
                 </div>
 
-                {activeRoom.type !== 'voice' && (
-                  <button onClick={() => inVoice ? leaveVoice() : joinVoice()}
+                {activeRoom.type !== 'voice' && inVoice && (
+                  <button onClick={handleLeaveVoice}
                     className="flex size-8 items-center justify-center rounded-lg transition-colors"
-                    style={{ color: inVoice ? 'var(--success)' : 'var(--text3)', background: inVoice ? '#22c55e15' : undefined }}
-                    onMouseEnter={(e) => !inVoice && (e.currentTarget.style.background = 'var(--surface2)')}
-                    onMouseLeave={(e) => !inVoice && (e.currentTarget.style.background = '')}>
+                    style={{ color: 'var(--success)', background: '#22c55e15' }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
                   </button>
                 )}
@@ -237,7 +250,7 @@ export function ChatPage() {
 
             {activeRoom.type === 'voice' ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-4">
-                {inVoice ? (
+                {inVoice && voiceRoomId === activeRoom.id ? (
                   <VoicePanel participants={participants} speakerDeviceId={speakerDeviceId} />
                 ) : micError ? (
                   <div className="flex flex-col items-center gap-3 rounded-2xl p-6 max-w-sm text-center"
@@ -271,14 +284,14 @@ export function ChatPage() {
                           : 'El micrófono está bloqueado. Ve a los ajustes del navegador, busca los permisos de este sitio y activa el micrófono. Luego pulsa Reintentar.'}
                     </p>
                     {micError !== 'notfound' && (
-                      <button onClick={joinVoice}
+                      <button onClick={handleJoinVoice}
                         className="mt-1 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
                         style={{ background: 'var(--primary)' }}>
                         {micError === 'denied' ? 'Permitir micrófono' : 'Reintentar'}
                       </button>
                     )}
                     {micError === 'notfound' && (
-                      <button onClick={joinVoice}
+                      <button onClick={handleJoinVoice}
                         className="mt-1 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
                         style={{ background: 'var(--primary)' }}>
                         Reintentar
@@ -294,10 +307,10 @@ export function ChatPage() {
                     </div>
                     <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>Canal de voz</p>
                     <p className="text-xs" style={{ color: 'var(--text3)' }}>Pulsa para unirte — se pedirá acceso al micrófono</p>
-                    <button onClick={joinVoice}
+                    <button onClick={handleJoinVoice}
                       className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-all"
                       style={{ background: 'var(--success)' }}>
-                      Unirse al canal
+                      {inVoice ? 'Cambiar a este canal' : 'Unirse al canal'}
                     </button>
                   </div>
                 )}
