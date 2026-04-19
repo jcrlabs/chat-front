@@ -184,7 +184,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
     <>
       <aside className={S.sidebar} style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
         {/* Header */}
-        <div className={S.header} style={{ borderColor: 'var(--border)' }}>
+        <div className={S.header} style={{ borderColor: 'var(--border)', paddingTop: 'env(safe-area-inset-top)', minHeight: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           <span className="flex-1 truncate text-sm font-semibold" style={{ color: 'var(--text)' }}>jcrlabs</span>
         </div>
 
@@ -501,7 +501,7 @@ export function RoomList({ activeRoomId, onSelect, onRoomDeleted, devices, micDe
         )}
 
         {/* User bar */}
-        <div className="flex h-14 shrink-0 items-center gap-2 px-2 border-t" style={{ background: 'var(--surface2)', borderColor: 'var(--border)' }}>
+        <div className="flex shrink-0 items-center gap-2 px-2 border-t" style={{ background: 'var(--surface2)', borderColor: 'var(--border)', minHeight: 'calc(3.5rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <button onClick={() => setShowProfile(true)} className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors"
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface3)'}
             onMouseLeave={(e) => e.currentTarget.style.background = ''}>
