@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  tag: v0.12.18
+  tag: v0.12.19
 
 ingress:
   host: chat.jcrlabs.net
