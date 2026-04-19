@@ -179,10 +179,11 @@ export function ChatPage() {
 
       {/* Sidebar */}
       <div className={[
-        'fixed inset-y-0 left-0 z-30 transition-transform duration-200',
+        'fixed left-0 z-30 transition-transform duration-200',
         'md:relative md:z-auto md:flex md:translate-x-0',
         sidebarOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full',
-      ].join(' ')}>
+      ].join(' ')}
+        style={{ top: 'env(safe-area-inset-top)', bottom: 'env(safe-area-inset-bottom)' }}>
         <RoomList
           activeRoomId={activeRoom?.id ?? null}
           onSelect={handleSelectRoom}
@@ -196,7 +197,7 @@ export function ChatPage() {
       </div>
 
       {/* Main area */}
-      <main className="flex flex-1 flex-col overflow-hidden min-w-0" style={{ background: 'var(--bg)' }}>
+      <main className="flex flex-1 flex-col overflow-hidden min-w-0" style={{ background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top)' }}>
         {activeRoom ? (
           <>
             {/* Topbar */}
