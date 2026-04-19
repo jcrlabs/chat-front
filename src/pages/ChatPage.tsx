@@ -179,11 +179,10 @@ export function ChatPage() {
 
       {/* Sidebar */}
       <div className={[
-        'fixed left-0 z-30 transition-transform duration-200',
+        'fixed inset-y-0 left-0 z-30 transition-transform duration-200',
         'md:relative md:z-auto md:flex md:translate-x-0',
         sidebarOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full',
-      ].join(' ')}
-        style={{ top: 'env(safe-area-inset-top)', bottom: 'env(safe-area-inset-bottom)' }}>
+      ].join(' ')}>
         <RoomList
           activeRoomId={activeRoom?.id ?? null}
           onSelect={handleSelectRoom}
@@ -197,12 +196,12 @@ export function ChatPage() {
       </div>
 
       {/* Main area */}
-      <main className="flex flex-1 flex-col overflow-hidden min-w-0" style={{ background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top)' }}>
+      <main className="flex flex-1 flex-col overflow-hidden min-w-0" style={{ background: 'var(--bg)' }}>
         {activeRoom ? (
           <>
             {/* Topbar */}
-            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4"
-              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <div className="flex shrink-0 items-center gap-3 border-b px-4"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)', minHeight: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}>
               <button className="md:hidden shrink-0 flex size-8 items-center justify-center rounded-lg transition-colors"
                 style={{ color: 'var(--text2)' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface2)'}
