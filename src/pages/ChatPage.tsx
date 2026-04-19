@@ -171,7 +171,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-svh overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="flex h-dvh overflow-hidden" style={{ background: 'var(--bg)' }}>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-20 bg-black/60 md:hidden animate-fade-in" onClick={() => setSidebarOpen(false)} />
