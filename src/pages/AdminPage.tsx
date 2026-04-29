@@ -114,8 +114,8 @@ function UsersTab() {
         />
       )}
 
-      <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg bg-[#2b2d31]">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-[#1e1f22] text-xs uppercase text-[#949ba4]">
               <th className="px-4 py-3 text-left">Usuario</th>
@@ -301,8 +301,8 @@ function RoomsTab() {
         />
       )}
 
-      <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg bg-[#2b2d31]">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b border-[#1e1f22] text-xs uppercase text-[#949ba4]">
               <th className="px-4 py-3 text-left">Sala</th>
