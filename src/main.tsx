@@ -36,12 +36,29 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
   const accessToken = useAuthStore((s) => s.accessToken)
   const setTokens = useAuthStore((s) => s.setTokens)
+  const setUser = useAuthStore((s) => s.setUser)
   const updateUser = useAuthStore((s) => s.updateUser)
   const logout = useAuthStore((s) => s.logout)
   const [ready, setReady] = useState(!user || !!accessToken)
 
   // Silent refresh on page load (accessToken not persisted).
   useEffect(() => {
+    // Handle demo token injected via URL query param (from portfolio iframe)
+    const params = new URLSearchParams(window.location.search)
+    const demoToken = params.get('demo_token')
+    if (demoToken) {
+      try {
+        const payload = jwtDecode(demoToken)
+        setTokens(demoToken)
+        setUser({ id: payload.sub, username: payload.username ?? 'demo', isAdmin: false })
+        window.history.replaceState({}, '', window.location.pathname)
+      } catch {
+        // malformed token — ignore
+      }
+      setReady(true)
+      return
+    }
+
     if (!user || accessToken) return
     doRefresh(setTokens, updateUser, logout).finally(() => setReady(true))
   }, [])

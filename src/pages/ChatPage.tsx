@@ -22,6 +22,7 @@ export function ChatPage() {
   const user = useAuthStore((s) => s.user)
   const updateUser = useAuthStore((s) => s.updateUser)
   const accessToken = useAuthStore((s) => s.accessToken)
+  const isDemoSession = user?.username === 'demo'
   const qc = useQueryClient()
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
   const [voiceRoomId, setVoiceRoomId] = useState<string | null>(null)
@@ -325,9 +326,16 @@ export function ChatPage() {
                   onDelete={(id) => deleteMessage.mutate({ messageId: id, roomId: activeRoom.id })}
                 />
                 <TypingIndicator usernames={typingUsernames} />
+                {isDemoSession && (
+                  <div className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 text-xs font-mono"
+                    style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', color: 'var(--text3)' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+                    Vista demo — solo lectura
+                  </div>
+                )}
                 <MessageInput onSend={handleSend}
                   onTyping={(t) => send({ type: 'typing', room_id: activeRoom.id, is_typing: t })}
-                  disabled={!connected} channelName={activeRoom.name} />
+                  disabled={!connected || isDemoSession} channelName={activeRoom.name} />
                 {inVoice && (
                   <VoicePanel participants={participants} speakerDeviceId={speakerDeviceId} />
                 )}
